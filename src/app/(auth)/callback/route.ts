@@ -21,7 +21,8 @@ export async function GET(request: Request) {
           .eq('id', data.user.id)
           .single()
 
-        if (profile && profile.role === 'student' && role === 'parent') {
+        const profileData = profile as { id: string; role: string } | null
+        if (profileData && profileData.role === 'student' && role === 'parent') {
           // Update role to parent if user registered as parent
           await supabase
             .from('profiles')
