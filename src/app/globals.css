@@ -1,26 +1,350 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Minecraft-inspired color palette */
+  --color-grass: #5D8C3E;
+  --color-grass-dark: #4A7030;
+  --color-dirt: #8B6914;
+  --color-dirt-dark: #6B5010;
+  --color-stone: #7F7F7F;
+  --color-stone-dark: #5F5F5F;
+  --color-diamond: #4AEDD9;
+  --color-emerald: #17DD62;
+  --color-gold: #FCEE4B;
+  --color-xp-green: #7EFC20;
+  --color-rare: #55FFFF;
+  --color-legendary: #FF55FF;
+
+  /* UI Colors */
+  --background: #2D2D2D;
+  --background-light: #3D3D3D;
+  --foreground: #FFFFFF;
+  --foreground-muted: #AAAAAA;
+  --border: #1A1A1A;
+  --border-light: #4A4A4A;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-pixel: 'Pixelify Sans', system-ui, sans-serif;
+  --font-sans: 'Inter', system-ui, sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* Inter - čitelný font pro text a čísla */
+@font-face {
+  font-family: 'Inter';
+  src: url('https://fonts.gstatic.com/s/inter/v18/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuLyfAZ9hjp-Ek-_EeA.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Pixelify Sans - pixel font pro Minecraft nadpisy */
+@font-face {
+  font-family: 'Pixelify Sans';
+  src: url('https://fonts.gstatic.com/s/pixelifysans/v1/CHy2V-3HFUT7aC4iv1TxGDR9DHEserHN25py2TTp0E1fZZM.woff2') format('woff2');
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Quicksand - zaoblený font pro Unicorn téma */
+@font-face {
+  font-family: 'Quicksand';
+  src: url('https://fonts.gstatic.com/s/quicksand/v31/6xK-dSZaM9iE8KbpRA_LJ3z8mH9BOJvgkP8o58a-wg.woff2') format('woff2');
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Montserrat - moderní font pro K-pop téma */
+@font-face {
+  font-family: 'Montserrat';
+  src: url('https://fonts.gstatic.com/s/montserrat/v29/JTUSjIg1_i6t8kCHKm459WlhyyTh89Y.woff2') format('woff2');
+  font-weight: 400 700 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+* {
+  box-sizing: border-box;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  min-height: 100vh;
+  /* Minecraft dirt texture pattern overlay */
+  background-image:
+    linear-gradient(rgba(45, 45, 45, 0.95), rgba(45, 45, 45, 0.95)),
+    url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23555555' fill-opacity='0.15'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2V36h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+}
+
+/* Pixel font pro nadpisy */
+.font-pixel {
+  font-family: 'Pixelify Sans', system-ui, sans-serif;
+}
+
+h1, h2, h3 {
+  font-family: 'Pixelify Sans', system-ui, sans-serif;
+}
+
+/* Minecraft-style button */
+.mc-button {
+  position: relative;
+  background: linear-gradient(to bottom, #8B8B8B 0%, #6B6B6B 50%, #5B5B5B 51%, #4B4B4B 100%);
+  border: 3px solid;
+  border-color: #FFFFFF #555555 #555555 #FFFFFF;
+  padding: 8px 16px;
+  color: white;
+  text-shadow: 2px 2px 0px #3F3F3F;
+  font-family: 'Pixelify Sans', system-ui, sans-serif;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.1s;
+  image-rendering: pixelated;
+}
+
+.mc-button:hover {
+  background: linear-gradient(to bottom, #9B9B9B 0%, #7B7B7B 50%, #6B6B6B 51%, #5B5B5B 100%);
+}
+
+.mc-button:active {
+  background: linear-gradient(to bottom, #6B6B6B 0%, #5B5B5B 50%, #4B4B4B 51%, #3B3B3B 100%);
+  border-color: #555555 #FFFFFF #FFFFFF #555555;
+  transform: translateY(2px);
+}
+
+.mc-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.mc-button-primary {
+  background: linear-gradient(to bottom, #5D8C3E 0%, #4D7C2E 50%, #3D6C1E 51%, #2D5C0E 100%);
+}
+
+.mc-button-primary:hover {
+  background: linear-gradient(to bottom, #6D9C4E 0%, #5D8C3E 50%, #4D7C2E 51%, #3D6C1E 100%);
+}
+
+.mc-button-danger {
+  background: linear-gradient(to bottom, #AA3333 0%, #882222 50%, #772222 51%, #661111 100%);
+}
+
+/* Minecraft-style card/panel */
+.mc-panel {
+  background: linear-gradient(to bottom, #C6C6C6 0%, #8B8B8B 100%);
+  border: 4px solid;
+  border-color: #FFFFFF #555555 #555555 #FFFFFF;
+  padding: 16px;
+  box-shadow:
+    inset 2px 2px 0 rgba(255, 255, 255, 0.2),
+    inset -2px -2px 0 rgba(0, 0, 0, 0.2);
+}
+
+.mc-panel-dark {
+  background: linear-gradient(to bottom, #3D3D3D 0%, #2D2D2D 100%);
+  color: white;
+}
+
+.mc-panel-inset {
+  background: linear-gradient(to bottom, #2D2D2D 0%, #1D1D1D 100%);
+  border-color: #555555 #FFFFFF #FFFFFF #555555;
+  color: white;
+}
+
+/* Minecraft-style input */
+.mc-input {
+  background: #000000;
+  border: 3px solid;
+  border-color: #555555 #FFFFFF #FFFFFF #555555;
+  padding: 12px 16px;
+  color: white;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 16px;
+  outline: none;
+}
+
+.mc-input-icon {
+  padding-left: 48px;
+}
+
+.mc-input:focus {
+  border-color: #FFFFFF #777777 #777777 #FFFFFF;
+  box-shadow: 0 0 0 2px var(--color-emerald);
+}
+
+/* XP Bar */
+.xp-bar-container {
+  background: #000000;
+  border: 3px solid;
+  border-color: #555555 #AAAAAA #AAAAAA #555555;
+  height: 24px;
+  position: relative;
+  overflow: hidden;
+}
+
+.xp-bar-fill {
+  background: linear-gradient(to bottom, var(--color-xp-green) 0%, #5EBC00 50%, #4E9C00 100%);
+  height: 100%;
+  transition: width 0.5s ease-out;
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.3);
+}
+
+.xp-bar-text {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: white;
+  text-shadow: 1px 1px 0 black, -1px -1px 0 black, 1px -1px 0 black, -1px 1px 0 black;
+  font-size: 14px;
+  font-weight: bold;
+}
+
+/* Emerald counter */
+.emerald-icon {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  background: linear-gradient(135deg, #17DD62 0%, #0FA84A 50%, #0B8838 100%);
+  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+  image-rendering: pixelated;
+}
+
+/* Animations */
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 5px var(--color-emerald); }
+  50% { box-shadow: 0 0 20px var(--color-emerald), 0 0 30px var(--color-emerald); }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-5px) rotate(-5deg); }
+  75% { transform: translateX(5px) rotate(5deg); }
+}
+
+@keyframes level-up {
+  0% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.2); opacity: 0.8; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@keyframes bounce-in {
+  0% { transform: scale(0); }
+  50% { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+
+@keyframes glow-pulse {
+  0%, 100% {
+    filter: drop-shadow(0 0 5px currentColor) drop-shadow(0 0 10px currentColor);
+  }
+  50% {
+    filter: drop-shadow(0 0 20px currentColor) drop-shadow(0 0 30px currentColor);
+  }
+}
+
+@keyframes streak-fire {
+  0%, 100% {
+    transform: translateY(0) scale(1);
+    filter: brightness(1);
+  }
+  50% {
+    transform: translateY(-3px) scale(1.1);
+    filter: brightness(1.2);
+  }
+}
+
+.animate-float {
+  animation: float 2s ease-in-out infinite;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.animate-shake {
+  animation: shake 0.5s ease-in-out;
+}
+
+.animate-level-up {
+  animation: level-up 0.5s ease-out;
+}
+
+.animate-shimmer {
+  animation: shimmer 3s linear infinite;
+}
+
+.animate-bounce-in {
+  animation: bounce-in 0.5s ease-out;
+}
+
+.animate-glow-pulse {
+  animation: glow-pulse 2s ease-in-out infinite;
+}
+
+.animate-streak-fire {
+  animation: streak-fire 1s ease-in-out infinite;
+}
+
+/* Rarity colors */
+.rarity-common {
+  color: #AAAAAA;
+}
+
+.rarity-rare {
+  color: var(--color-rare);
+  text-shadow: 0 0 10px var(--color-rare);
+}
+
+.rarity-legendary {
+  color: var(--color-legendary);
+  text-shadow: 0 0 10px var(--color-legendary);
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* Mobile optimizations */
+@media (max-width: 640px) {
+  body {
+    font-size: 16px;
+  }
+
+  .mc-button {
+    padding: 12px 20px;
+    font-size: 18px;
+  }
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: #2D2D2D;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #5D5D5D;
+  border: 2px solid #2D2D2D;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #7D7D7D;
 }
