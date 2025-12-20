@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Gift, Sparkles, Loader2 } from 'lucide-react'
-import { MYSTERY_BOX_REWARDS } from '@/lib/constants'
 
 interface MysteryBoxProps {
   isOpen: boolean

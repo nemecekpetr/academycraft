@@ -21,10 +21,11 @@ import {
   Check,
   X,
   Lock,
+  type LucideProps,
 } from 'lucide-react'
 import type { ShopItem, Purchase } from '@/types/database'
 
-const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
+const iconMap: Record<string, React.ComponentType<LucideProps>> = {
   candy: Candy,
   'gamepad-2': Gamepad2,
   film: Film,

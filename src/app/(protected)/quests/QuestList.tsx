@@ -16,10 +16,11 @@ import {
   Loader2,
   X,
   Check,
+  type LucideProps,
 } from 'lucide-react'
 import type { Activity, CompletedActivity } from '@/types/database'
 
-const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
+const iconMap: Record<string, React.ComponentType<LucideProps>> = {
   scroll: Scroll,
   brain: Brain,
   'graduation-cap': GraduationCap,
@@ -141,7 +142,7 @@ export default function QuestList({ activities, pendingActivities, userId }: Que
             <motion.button
               key={activity.id}
               onClick={() => setSelectedActivity(activity)}
-              title={activity.description}
+              title={activity.description || undefined}
               className="text-center p-3 border-2 rounded-xl cursor-pointer transition-all"
               style={{
                 backgroundColor: theme.colors.card,

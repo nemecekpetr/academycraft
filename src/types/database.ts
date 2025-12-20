@@ -85,32 +85,42 @@ export interface Database {
         Row: Profile
         Insert: Omit<Profile, 'created_at'>
         Update: Partial<Omit<Profile, 'id' | 'created_at'>>
+        Relationships: []
       }
       activities: {
         Row: Activity
         Insert: Omit<Activity, 'id' | 'created_at'>
         Update: Partial<Omit<Activity, 'id' | 'created_at'>>
+        Relationships: []
       }
       completed_activities: {
         Row: CompletedActivity
         Insert: Omit<CompletedActivity, 'id'>
         Update: Partial<Omit<CompletedActivity, 'id'>>
+        Relationships: []
       }
       shop_items: {
         Row: ShopItem
         Insert: Omit<ShopItem, 'id' | 'created_at'>
         Update: Partial<Omit<ShopItem, 'id' | 'created_at'>>
+        Relationships: []
       }
       purchases: {
         Row: Purchase
         Insert: Omit<Purchase, 'id'>
         Update: Partial<Omit<Purchase, 'id'>>
+        Relationships: []
       }
       mystery_boxes: {
         Row: MysteryBox
         Insert: Omit<MysteryBox, 'id'>
         Update: Partial<Omit<MysteryBox, 'id'>>
+        Relationships: []
       }
     }
+    Views: Record<string, never>
+    Functions: Record<string, never>
+    Enums: Record<string, never>
+    CompositeTypes: Record<string, never>
   }
 }
