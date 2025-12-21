@@ -50,7 +50,7 @@ export async function proxy(request: NextRequest) {
   }
 
   // Protected routes (admin has its own auth system)
-  const protectedPaths = ['/dashboard', '/quests', '/shop', '/profile']
+  const protectedPaths = ['/dashboard', '/quests', '/shop', '/profile', '/parent']
   const isProtectedPath = protectedPaths.some((path) =>
     request.nextUrl.pathname.startsWith(path)
   )

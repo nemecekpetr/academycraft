@@ -5,7 +5,9 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { THEMES, ThemeId } from '@/lib/themes'
-import { Mail, Lock, User, Loader2, ArrowLeft, Check } from 'lucide-react'
+import { Mail, Lock, User, Loader2, ArrowLeft, Check, Users, GraduationCap } from 'lucide-react'
+
+type UserRole = 'student' | 'parent'
 
 export default function RegisterPage() {
   const router = useRouter()
@@ -14,6 +16,7 @@ export default function RegisterPage() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [username, setUsername] = useState('')
   const [fullName, setFullName] = useState('')
+  const [selectedRole, setSelectedRole] = useState<UserRole>('student')
   const [selectedTheme, setSelectedTheme] = useState<ThemeId>('unicorn')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -49,7 +52,7 @@ export default function RegisterPage() {
         data: {
           username,
           full_name: fullName || null,
-          role: 'student',
+          role: selectedRole,
           theme: selectedTheme,
         },
         emailRedirectTo: `${window.location.origin}/callback`,
@@ -115,7 +118,60 @@ export default function RegisterPage() {
             </div>
           )}
 
-          {/* Theme Selection */}
+          {/* Role Selection */}
+          <div>
+            <label className="block mb-3 text-sm font-bold">Jsem:</label>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setSelectedRole('student')}
+                className={`relative p-4 rounded-lg border-2 transition-all ${
+                  selectedRole === 'student'
+                    ? 'border-[var(--color-emerald)] bg-[var(--color-emerald)]/10'
+                    : 'border-[#2a2a4e] hover:border-gray-500'
+                }`}
+              >
+                {selectedRole === 'student' && (
+                  <div className="absolute -top-2 -right-2 w-5 h-5 rounded-full flex items-center justify-center bg-[var(--color-emerald)]">
+                    <Check className="w-3 h-3 text-white" />
+                  </div>
+                )}
+                <GraduationCap className={`w-8 h-8 mx-auto mb-2 ${selectedRole === 'student' ? 'text-[var(--color-emerald)]' : 'text-gray-400'}`} />
+                <div className={`text-sm font-bold ${selectedRole === 'student' ? 'text-[var(--color-emerald)]' : 'text-gray-400'}`}>
+                  Student
+                </div>
+                <div className="text-xs text-[var(--foreground-muted)] mt-1">
+                  Plním úkoly a sbírám odměny
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSelectedRole('parent')}
+                className={`relative p-4 rounded-lg border-2 transition-all ${
+                  selectedRole === 'parent'
+                    ? 'border-[var(--color-legendary)] bg-[var(--color-legendary)]/10'
+                    : 'border-[#2a2a4e] hover:border-gray-500'
+                }`}
+              >
+                {selectedRole === 'parent' && (
+                  <div className="absolute -top-2 -right-2 w-5 h-5 rounded-full flex items-center justify-center bg-[var(--color-legendary)]">
+                    <Check className="w-3 h-3 text-white" />
+                  </div>
+                )}
+                <Users className={`w-8 h-8 mx-auto mb-2 ${selectedRole === 'parent' ? 'text-[var(--color-legendary)]' : 'text-gray-400'}`} />
+                <div className={`text-sm font-bold ${selectedRole === 'parent' ? 'text-[var(--color-legendary)]' : 'text-gray-400'}`}>
+                  Rodič
+                </div>
+                <div className="text-xs text-[var(--foreground-muted)] mt-1">
+                  Schvaluji aktivity dětí
+                </div>
+              </button>
+            </div>
+          </div>
+
+          {/* Theme Selection - only for students */}
+          {selectedRole === 'student' && (
           <div>
             <label className="block mb-3 text-sm font-bold">Vyber si styl aplikace:</label>
             <div className="grid grid-cols-3 gap-2">
@@ -152,9 +208,10 @@ export default function RegisterPage() {
               {THEMES[selectedTheme].description}
             </p>
           </div>
+          )}
 
           <div>
-            <label className="block mb-2 text-sm">Přezdívka *</label>
+            <label className="block mb-2 text-sm">{selectedRole === 'parent' ? 'Jméno' : 'Přezdívka'} *</label>
             <div className="relative">
               <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--foreground-muted)] z-10" />
               <input
@@ -162,7 +219,7 @@ export default function RegisterPage() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 className="mc-input mc-input-icon w-full"
-                placeholder="Tvá přezdívka"
+                placeholder={selectedRole === 'parent' ? 'Vaše jméno' : 'Tvá přezdívka'}
                 required
                 minLength={3}
                 maxLength={20}
@@ -235,7 +292,9 @@ export default function RegisterPage() {
             disabled={loading}
             className="mc-button mc-button-primary w-full text-lg py-3 flex items-center justify-center gap-2"
             style={{
-              background: `linear-gradient(to bottom, ${THEMES[selectedTheme].colors.primary} 0%, ${THEMES[selectedTheme].colors.secondary} 100%)`,
+              background: selectedRole === 'parent'
+                ? 'linear-gradient(to bottom, var(--color-legendary) 0%, #7c3aed 100%)'
+                : `linear-gradient(to bottom, ${THEMES[selectedTheme].colors.primary} 0%, ${THEMES[selectedTheme].colors.secondary} 100%)`,
             }}
           >
             {loading ? (
@@ -245,7 +304,7 @@ export default function RegisterPage() {
               </>
             ) : (
               <>
-                {THEMES[selectedTheme].icon} Vytvořit účet
+                {selectedRole === 'parent' ? <Users className="w-5 h-5" /> : THEMES[selectedTheme].icon} Vytvořit účet
               </>
             )}
           </button>

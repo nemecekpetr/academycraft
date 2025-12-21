@@ -23,7 +23,8 @@ interface Profile {
   email: string
   username: string
   full_name: string | null
-  role: 'student' | 'admin'
+  role: 'student' | 'parent' | 'admin'
+  parent_id: string | null
   xp: number
   emeralds: number
   current_streak: number
@@ -91,6 +92,7 @@ export default function AdminUsersPage() {
         username: editForm.username,
         full_name: editForm.full_name,
         role: editForm.role,
+        parent_id: editForm.parent_id,
         xp: editForm.xp,
         emeralds: editForm.emeralds,
         is_banned: editForm.is_banned,
@@ -109,17 +111,21 @@ export default function AdminUsersPage() {
   async function deleteUser(id: string) {
     if (!confirm('Opravdu chceš smazat tohoto uživatele? Tato akce je nevratná.')) return
 
-    const supabase = createClient()
+    try {
+      const response = await fetch(`/api/admin/users/${id}`, {
+        method: 'DELETE',
+      })
 
-    // Delete from profiles (auth.users deletion requires admin API)
-    const { error } = await supabase
-      .from('profiles')
-      .delete()
-      .eq('id', id)
-
-    if (!error) {
-      setUsers(users.filter(u => u.id !== id))
-      setSelectedUser(null)
+      if (response.ok) {
+        setUsers(users.filter(u => u.id !== id))
+        setSelectedUser(null)
+      } else {
+        const data = await response.json()
+        alert(`Chyba při mazání: ${data.error || 'Neznámá chyba'}`)
+      }
+    } catch (error) {
+      console.error('Error deleting user:', error)
+      alert('Nepodařilo se smazat uživatele')
     }
   }
 
@@ -148,6 +154,7 @@ export default function AdminUsersPage() {
   function getRoleIcon(role: string) {
     switch (role) {
       case 'admin': return <Crown className="w-4 h-4 text-[var(--color-legendary)]" />
+      case 'parent': return <Users className="w-4 h-4 text-[var(--color-rare)]" />
       default: return <User className="w-4 h-4 text-[var(--color-grass)]" />
     }
   }
@@ -155,8 +162,19 @@ export default function AdminUsersPage() {
   function getRoleBadgeColor(role: string) {
     switch (role) {
       case 'admin': return 'bg-[var(--color-legendary)]/20 text-[var(--color-legendary)]'
+      case 'parent': return 'bg-[var(--color-rare)]/20 text-[var(--color-rare)]'
       default: return 'bg-[var(--color-grass)]/20 text-[var(--color-grass)]'
     }
+  }
+
+  function getParentName(parentId: string | null) {
+    if (!parentId) return null
+    const parent = users.find(u => u.id === parentId)
+    return parent?.username || 'Neznámý'
+  }
+
+  function getChildren(parentId: string) {
+    return users.filter(u => u.parent_id === parentId)
   }
 
   if (loading) {
@@ -195,6 +213,7 @@ export default function AdminUsersPage() {
         >
           <option value="all">Všechny role</option>
           <option value="student">Studenti</option>
+          <option value="parent">Rodiče</option>
           <option value="admin">Admini</option>
         </select>
       </div>
@@ -362,6 +381,7 @@ export default function AdminUsersPage() {
                     className="w-full px-4 py-2 bg-[#1a1a2e] border border-[#2a2a4e] rounded-lg text-white"
                   >
                     <option value="student">Student</option>
+                    <option value="parent">Rodič</option>
                     <option value="admin">Admin</option>
                   </select>
                 ) : (
@@ -371,6 +391,50 @@ export default function AdminUsersPage() {
                   </span>
                 )}
               </div>
+
+              {/* Parent assignment - only for students */}
+              {selectedUser.role === 'student' && (
+                <div>
+                  <label className="block text-sm text-[var(--foreground-muted)] mb-2">Rodič</label>
+                  {editMode ? (
+                    <select
+                      value={editForm.parent_id || ''}
+                      onChange={(e) => setEditForm({ ...editForm, parent_id: e.target.value || null })}
+                      className="w-full px-4 py-2 bg-[#1a1a2e] border border-[#2a2a4e] rounded-lg text-white"
+                    >
+                      <option value="">Bez rodiče</option>
+                      {users.filter(u => u.role === 'parent').map(parent => (
+                        <option key={parent.id} value={parent.id}>
+                          {parent.username} ({parent.email})
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span className="text-white">
+                      {getParentName(selectedUser.parent_id) || 'Nepřiřazen'}
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* Children - only for parents */}
+              {selectedUser.role === 'parent' && (
+                <div>
+                  <label className="block text-sm text-[var(--foreground-muted)] mb-2">Děti</label>
+                  <div className="space-y-2">
+                    {getChildren(selectedUser.id).length === 0 ? (
+                      <p className="text-[var(--foreground-muted)]">Žádné přiřazené děti</p>
+                    ) : (
+                      getChildren(selectedUser.id).map(child => (
+                        <div key={child.id} className="flex items-center justify-between bg-[#1a1a2e] p-2 rounded-lg">
+                          <span className="text-white">{child.username}</span>
+                          <span className="text-xs text-[var(--foreground-muted)]">{child.email}</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Info */}
               <div className="text-sm text-[var(--foreground-muted)]">

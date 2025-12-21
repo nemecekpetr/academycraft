@@ -12,7 +12,9 @@ import {
   LogOut,
   Settings,
   Menu,
-  X
+  X,
+  ClipboardCheck,
+  Gift
 } from 'lucide-react'
 
 export default function AdminLayout({
@@ -74,6 +76,8 @@ export default function AdminLayout({
 
   const navItems = [
     { href: '/admin/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+    { href: '/admin/approvals', icon: ClipboardCheck, label: 'Schvalování' },
+    { href: '/admin/purchases', icon: Gift, label: 'Nákupy' },
     { href: '/admin/users', icon: Users, label: 'Uživatelé' },
     { href: '/admin/activities', icon: Scroll, label: 'Aktivity' },
     { href: '/admin/shop', icon: ShoppingBag, label: 'Obchod' },

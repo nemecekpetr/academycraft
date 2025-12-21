@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { calculateLevel, getLevelInfo } from '@/lib/constants'
+import { calculateLevel, getLevelInfo, shouldResetStreak } from '@/lib/constants'
 import XpBar from '@/components/game/XpBar'
 import EmeraldCounter from '@/components/game/EmeraldCounter'
 import StreakBadge from '@/components/game/StreakBadge'
@@ -73,6 +73,15 @@ export default async function DashboardPage() {
   // Check if parent role - redirect to parent dashboard
   if (profile.role === 'parent' || profile.role === 'admin') {
     redirect('/parent')
+  }
+
+  // Check and reset streak if user missed days
+  if (shouldResetStreak(profile.last_activity_date) && profile.current_streak > 0) {
+    await supabase
+      .from('profiles')
+      .update({ current_streak: 0 })
+      .eq('id', user.id)
+    profile.current_streak = 0
   }
 
   return (
