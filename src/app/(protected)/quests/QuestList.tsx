@@ -68,6 +68,48 @@ export default function QuestList({ activities, pendingActivities, userId }: Que
       return
     }
 
+    // Send notification to parent if they have one
+    try {
+      // Get current user's profile with parent info
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('username, parent_id')
+        .eq('id', userId)
+        .single()
+
+      if (profile?.parent_id) {
+        // Get parent's email
+        const { data: parent } = await supabase
+          .from('profiles')
+          .select('email, username')
+          .eq('id', profile.parent_id)
+          .single()
+
+        if (parent?.email) {
+          // Send notification email
+          await fetch('/api/notifications/approval-request', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              parentEmail: parent.email,
+              parentName: parent.username,
+              childName: profile.username,
+              activityName: selectedActivity.name,
+              activityIcon: selectedActivity.icon === 'star' ? '⭐' :
+                            selectedActivity.icon === 'brain' ? '🧠' :
+                            selectedActivity.icon === 'graduation-cap' ? '🎓' :
+                            selectedActivity.icon === 'book-open' ? '📖' :
+                            selectedActivity.icon === 'bug' ? '🐛' :
+                            selectedActivity.icon === 'scroll' ? '📜' : '✅'
+            }),
+          })
+        }
+      }
+    } catch (notifError) {
+      // Don't fail the submission if notification fails
+      console.error('Failed to send notification:', notifError)
+    }
+
     setSuccess(true)
     setTimeout(() => {
       setSelectedActivity(null)

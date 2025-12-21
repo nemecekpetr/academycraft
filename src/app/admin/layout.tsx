@@ -14,7 +14,8 @@ import {
   Menu,
   X,
   ClipboardCheck,
-  Gift
+  Gift,
+  Trophy
 } from 'lucide-react'
 
 export default function AdminLayout({
@@ -79,6 +80,7 @@ export default function AdminLayout({
     { href: '/admin/approvals', icon: ClipboardCheck, label: 'Schvalování' },
     { href: '/admin/purchases', icon: Gift, label: 'Nákupy' },
     { href: '/admin/users', icon: Users, label: 'Uživatelé' },
+    { href: '/admin/leaderboard', icon: Trophy, label: 'Žebříček' },
     { href: '/admin/activities', icon: Scroll, label: 'Aktivity' },
     { href: '/admin/shop', icon: ShoppingBag, label: 'Obchod' },
     { href: '/admin/settings', icon: Settings, label: 'Nastavení' },

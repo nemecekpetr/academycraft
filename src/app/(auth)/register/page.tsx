@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { THEMES, ThemeId } from '@/lib/themes'
+import { DEFAULT_THEME } from '@/lib/themes'
 import { Mail, Lock, User, Loader2, ArrowLeft, Check, Users, GraduationCap } from 'lucide-react'
 
 type UserRole = 'student' | 'parent'
@@ -17,7 +17,6 @@ export default function RegisterPage() {
   const [username, setUsername] = useState('')
   const [fullName, setFullName] = useState('')
   const [selectedRole, setSelectedRole] = useState<UserRole>('student')
-  const [selectedTheme, setSelectedTheme] = useState<ThemeId>('unicorn')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
@@ -53,7 +52,7 @@ export default function RegisterPage() {
           username,
           full_name: fullName || null,
           role: selectedRole,
-          theme: selectedTheme,
+          theme: DEFAULT_THEME,
         },
         emailRedirectTo: `${window.location.origin}/callback`,
       },
@@ -74,12 +73,11 @@ export default function RegisterPage() {
   }
 
   if (success) {
-    const theme = THEMES[selectedTheme]
     return (
       <main className="min-h-screen flex flex-col items-center justify-center p-4">
         <div className="mc-panel mc-panel-dark max-w-md w-full text-center">
           <div className="text-6xl mb-4">📧</div>
-          <h1 className="text-2xl font-bold mb-4" style={{ color: theme.colors.primary }}>
+          <h1 className="text-2xl font-bold mb-4 text-[var(--color-emerald)]">
             Zkontroluj svůj email!
           </h1>
           <p className="text-[var(--foreground-muted)] mb-6">
@@ -170,46 +168,6 @@ export default function RegisterPage() {
             </div>
           </div>
 
-          {/* Theme Selection - only for students */}
-          {selectedRole === 'student' && (
-          <div>
-            <label className="block mb-3 text-sm font-bold">Vyber si styl aplikace:</label>
-            <div className="grid grid-cols-3 gap-2">
-              {(Object.values(THEMES) as typeof THEMES[ThemeId][]).map((theme) => (
-                <button
-                  key={theme.id}
-                  type="button"
-                  onClick={() => setSelectedTheme(theme.id)}
-                  className={`relative p-3 rounded-lg border-2 transition-all ${
-                    selectedTheme === theme.id
-                      ? 'border-white'
-                      : 'border-transparent hover:border-gray-600'
-                  }`}
-                  style={{
-                    backgroundColor: theme.colors.card,
-                  }}
-                >
-                  {selectedTheme === theme.id && (
-                    <div
-                      className="absolute -top-2 -right-2 w-5 h-5 rounded-full flex items-center justify-center"
-                      style={{ backgroundColor: theme.colors.primary }}
-                    >
-                      <Check className="w-3 h-3 text-white" />
-                    </div>
-                  )}
-                  <div className="text-2xl mb-1">{theme.icon}</div>
-                  <div className="text-xs font-bold" style={{ color: theme.colors.primary }}>
-                    {theme.name}
-                  </div>
-                </button>
-              ))}
-            </div>
-            <p className="text-xs text-[var(--foreground-muted)] mt-2 text-center">
-              {THEMES[selectedTheme].description}
-            </p>
-          </div>
-          )}
-
           <div>
             <label className="block mb-2 text-sm">{selectedRole === 'parent' ? 'Jméno' : 'Přezdívka'} *</label>
             <div className="relative">
@@ -294,7 +252,7 @@ export default function RegisterPage() {
             style={{
               background: selectedRole === 'parent'
                 ? 'linear-gradient(to bottom, var(--color-legendary) 0%, #7c3aed 100%)'
-                : `linear-gradient(to bottom, ${THEMES[selectedTheme].colors.primary} 0%, ${THEMES[selectedTheme].colors.secondary} 100%)`,
+                : 'linear-gradient(to bottom, var(--color-emerald) 0%, #3D8C3E 100%)',
             }}
           >
             {loading ? (
@@ -304,7 +262,7 @@ export default function RegisterPage() {
               </>
             ) : (
               <>
-                {selectedRole === 'parent' ? <Users className="w-5 h-5" /> : THEMES[selectedTheme].icon} Vytvořit účet
+                {selectedRole === 'parent' ? <Users className="w-5 h-5" /> : <GraduationCap className="w-5 h-5" />} Vytvořit účet
               </>
             )}
           </button>

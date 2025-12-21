@@ -43,6 +43,16 @@ export default function AdminUsersPage() {
   const [editMode, setEditMode] = useState(false)
   const [editForm, setEditForm] = useState<Partial<Profile>>({})
   const [saving, setSaving] = useState(false)
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [createForm, setCreateForm] = useState({
+    email: '',
+    password: '',
+    username: '',
+    fullName: '',
+    role: 'student' as 'student' | 'parent',
+  })
+  const [createError, setCreateError] = useState<string | null>(null)
+  const [creating, setCreating] = useState(false)
 
   useEffect(() => {
     loadUsers()
@@ -151,6 +161,56 @@ export default function AdminUsersPage() {
     setEditMode(false)
   }
 
+  async function createUser() {
+    setCreateError(null)
+
+    if (!createForm.email || !createForm.password || !createForm.username) {
+      setCreateError('Vyplň všechna povinná pole')
+      return
+    }
+
+    if (createForm.password.length < 8) {
+      setCreateError('Heslo musí mít alespoň 8 znaků')
+      return
+    }
+
+    setCreating(true)
+
+    try {
+      const response = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(createForm),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        setCreateError(data.error || 'Nepodařilo se vytvořit uživatele')
+        setCreating(false)
+        return
+      }
+
+      // Reload users list
+      await loadUsers()
+
+      // Reset form and close modal
+      setCreateForm({
+        email: '',
+        password: '',
+        username: '',
+        fullName: '',
+        role: 'student',
+      })
+      setShowCreateModal(false)
+    } catch (error) {
+      console.error('Error creating user:', error)
+      setCreateError('Nepodařilo se vytvořit uživatele')
+    }
+
+    setCreating(false)
+  }
+
   function getRoleIcon(role: string) {
     switch (role) {
       case 'admin': return <Crown className="w-4 h-4 text-[var(--color-legendary)]" />
@@ -216,6 +276,13 @@ export default function AdminUsersPage() {
           <option value="parent">Rodiče</option>
           <option value="admin">Admini</option>
         </select>
+        <button
+          onClick={() => setShowCreateModal(true)}
+          className="px-4 py-3 bg-[var(--color-emerald)] hover:bg-[var(--color-emerald)]/80 text-black font-medium rounded-lg transition-colors flex items-center gap-2"
+        >
+          <Plus className="w-5 h-5" />
+          Nový uživatel
+        </button>
       </div>
 
       <div className="text-sm text-[var(--foreground-muted)] mb-4">
@@ -484,6 +551,146 @@ export default function AdminUsersPage() {
                     </button>
                   </>
                 )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create User Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50" onClick={() => setShowCreateModal(false)}>
+          <div className="bg-[#0f0f1a] border border-[#2a2a4e] rounded-xl max-w-md w-full" onClick={e => e.stopPropagation()}>
+            <div className="p-6 border-b border-[#2a2a4e] flex items-center justify-between">
+              <h2 className="text-xl font-bold text-white">Nový uživatel</h2>
+              <button onClick={() => setShowCreateModal(false)} className="p-2 hover:bg-[#2a2a4e] rounded-lg">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              {createError && (
+                <div className="bg-red-500/20 border border-red-500 p-3 rounded-lg text-red-400 text-sm">
+                  {createError}
+                </div>
+              )}
+
+              {/* Role Selection */}
+              <div>
+                <label className="block text-sm text-[var(--foreground-muted)] mb-2">Role *</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setCreateForm({ ...createForm, role: 'student' })}
+                    className={`relative p-3 rounded-lg border-2 transition-all ${
+                      createForm.role === 'student'
+                        ? 'border-[var(--color-grass)] bg-[var(--color-grass)]/10'
+                        : 'border-[#2a2a4e] hover:border-gray-500'
+                    }`}
+                  >
+                    {createForm.role === 'student' && (
+                      <div className="absolute -top-2 -right-2 w-5 h-5 rounded-full flex items-center justify-center bg-[var(--color-grass)]">
+                        <CheckCircle className="w-3 h-3 text-white" />
+                      </div>
+                    )}
+                    <User className={`w-6 h-6 mx-auto mb-1 ${createForm.role === 'student' ? 'text-[var(--color-grass)]' : 'text-gray-400'}`} />
+                    <div className={`text-sm font-bold ${createForm.role === 'student' ? 'text-[var(--color-grass)]' : 'text-gray-400'}`}>
+                      Student
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setCreateForm({ ...createForm, role: 'parent' })}
+                    className={`relative p-3 rounded-lg border-2 transition-all ${
+                      createForm.role === 'parent'
+                        ? 'border-[var(--color-rare)] bg-[var(--color-rare)]/10'
+                        : 'border-[#2a2a4e] hover:border-gray-500'
+                    }`}
+                  >
+                    {createForm.role === 'parent' && (
+                      <div className="absolute -top-2 -right-2 w-5 h-5 rounded-full flex items-center justify-center bg-[var(--color-rare)]">
+                        <CheckCircle className="w-3 h-3 text-white" />
+                      </div>
+                    )}
+                    <Users className={`w-6 h-6 mx-auto mb-1 ${createForm.role === 'parent' ? 'text-[var(--color-rare)]' : 'text-gray-400'}`} />
+                    <div className={`text-sm font-bold ${createForm.role === 'parent' ? 'text-[var(--color-rare)]' : 'text-gray-400'}`}>
+                      Rodič
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm text-[var(--foreground-muted)] mb-2">
+                  {createForm.role === 'parent' ? 'Jméno' : 'Přezdívka'} *
+                </label>
+                <input
+                  type="text"
+                  value={createForm.username}
+                  onChange={(e) => setCreateForm({ ...createForm, username: e.target.value })}
+                  placeholder={createForm.role === 'parent' ? 'Jan Novák' : 'Přezdívka'}
+                  className="w-full px-4 py-2 bg-[#1a1a2e] border border-[#2a2a4e] rounded-lg text-white focus:border-[var(--color-legendary)] focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-[var(--foreground-muted)] mb-2">Celé jméno</label>
+                <input
+                  type="text"
+                  value={createForm.fullName}
+                  onChange={(e) => setCreateForm({ ...createForm, fullName: e.target.value })}
+                  placeholder="Jan Novák"
+                  className="w-full px-4 py-2 bg-[#1a1a2e] border border-[#2a2a4e] rounded-lg text-white focus:border-[var(--color-legendary)] focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-[var(--foreground-muted)] mb-2">Email *</label>
+                <input
+                  type="email"
+                  value={createForm.email}
+                  onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}
+                  placeholder="email@example.com"
+                  className="w-full px-4 py-2 bg-[#1a1a2e] border border-[#2a2a4e] rounded-lg text-white focus:border-[var(--color-legendary)] focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-[var(--foreground-muted)] mb-2">Heslo *</label>
+                <input
+                  type="password"
+                  value={createForm.password}
+                  onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })}
+                  placeholder="Alespoň 8 znaků"
+                  className="w-full px-4 py-2 bg-[#1a1a2e] border border-[#2a2a4e] rounded-lg text-white focus:border-[var(--color-legendary)] focus:outline-none"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={() => setShowCreateModal(false)}
+                  className="flex-1 px-4 py-2 bg-[#2a2a4e] hover:bg-[#3a3a5e] rounded-lg transition-colors"
+                >
+                  Zrušit
+                </button>
+                <button
+                  onClick={createUser}
+                  disabled={creating}
+                  className="flex-1 px-4 py-2 bg-[var(--color-emerald)] hover:bg-[var(--color-emerald)]/80 text-black font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+                >
+                  {creating ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Vytvářím...
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="w-4 h-4" />
+                      Vytvořit
+                    </>
+                  )}
+                </button>
               </div>
             </div>
           </div>
