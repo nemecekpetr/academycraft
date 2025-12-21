@@ -13,7 +13,9 @@ import {
   Scroll,
   Star,
   Gem,
-  CheckCircle
+  CheckCircle,
+  UserCheck,
+  Zap
 } from 'lucide-react'
 
 interface Activity {
@@ -225,13 +227,28 @@ export default function AdminActivitiesPage() {
                 </div>
                 <div>
                   <h3 className="font-bold text-white">{activity.name}</h3>
-                  {activity.requires_approval && (
-                    <span className="text-xs text-[var(--foreground-muted)] flex items-center gap-1">
-                      <CheckCircle className="w-3 h-3" />
-                      Vyžaduje schválení
-                    </span>
-                  )}
                 </div>
+              </div>
+              {/* Approval indicator */}
+              <div
+                className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium ${
+                  activity.requires_approval
+                    ? 'bg-[var(--color-legendary)]/20 text-[var(--color-legendary)]'
+                    : 'bg-[var(--color-xp-green)]/20 text-[var(--color-xp-green)]'
+                }`}
+                title={activity.requires_approval ? 'Vyžaduje schválení rodičem' : 'Automaticky schváleno'}
+              >
+                {activity.requires_approval ? (
+                  <>
+                    <UserCheck className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Schválení</span>
+                  </>
+                ) : (
+                  <>
+                    <Zap className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Auto</span>
+                  </>
+                )}
               </div>
             </div>
 

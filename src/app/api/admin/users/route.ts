@@ -63,6 +63,30 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: authError.message }, { status: 500 })
     }
 
+    // Also create profile in profiles table (trigger might not fire for admin.createUser)
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .upsert({
+        id: authData.user.id,
+        email,
+        username,
+        full_name: fullName || null,
+        role,
+        theme: 'minecraft',
+        xp: 0,
+        emeralds: 0,
+        current_streak: 0,
+        longest_streak: 0,
+        is_banned: false,
+      })
+
+    if (profileError) {
+      console.error('Error creating profile:', profileError)
+      // User was created in auth but profile failed - try to clean up
+      await supabase.auth.admin.deleteUser(authData.user.id)
+      return NextResponse.json({ error: 'Nepodařilo se vytvořit profil uživatele' }, { status: 500 })
+    }
+
     return NextResponse.json({
       success: true,
       user: {

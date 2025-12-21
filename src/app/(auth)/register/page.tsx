@@ -59,10 +59,24 @@ export default function RegisterPage() {
     })
 
     if (error) {
-      if (error.message.includes('already registered')) {
+      console.error('Registration error:', error)
+
+      // Map common Supabase errors to Czech messages
+      if (error.message.includes('already registered') || error.message.includes('already been registered')) {
         setError('Tento email je již zaregistrován')
+      } else if (error.message.includes('valid email')) {
+        setError('Zadej platnou emailovou adresu')
+      } else if (error.message.includes('password')) {
+        setError('Heslo nesplňuje požadavky (min. 8 znaků)')
+      } else if (error.message.includes('rate limit') || error.message.includes('too many')) {
+        setError('Příliš mnoho pokusů. Počkej chvíli a zkus to znovu.')
+      } else if (error.message.includes('network') || error.message.includes('fetch')) {
+        setError('Chyba připojení. Zkontroluj internet a zkus to znovu.')
+      } else if (error.message.includes('Anonymous sign-ins are disabled')) {
+        setError('Registrace je dočasně nedostupná. Kontaktuj administrátora.')
       } else {
-        setError('Chyba při registraci. Zkus to znovu.')
+        // Show the actual error for debugging, but make it user-friendly
+        setError(`Chyba: ${error.message}`)
       }
       setLoading(false)
       return
