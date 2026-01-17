@@ -30,45 +30,45 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Feature cards */}
+      {/* Feature cards - Growth Mindset / Motivation 3.0 */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl w-full mb-12">
         <div className="mc-panel-dark mc-panel">
           <div className="flex items-center gap-3 mb-2">
-            <div className="emerald-icon scale-150" />
-            <h3 className="text-xl">Sbírej Emeraldy</h3>
+            <Pickaxe className="w-6 h-6 text-[var(--color-stone)]" />
+            <h3 className="text-xl">Uč se po svém</h3>
           </div>
           <p className="text-sm text-[var(--foreground-muted)]">
-            Za každý splněný úkol získáš odměny, které můžeš utratit v obchodě
+            Vyber si, co a kdy chceš procvičovat. Ty jsi tu šéf!
           </p>
         </div>
 
         <div className="mc-panel-dark mc-panel">
           <div className="flex items-center gap-3 mb-2">
             <Trophy className="w-6 h-6 text-[var(--color-gold)]" />
-            <h3 className="text-xl">Leveluj postavu</h3>
+            <h3 className="text-xl">Sleduj svůj růst</h3>
           </div>
           <p className="text-sm text-[var(--foreground-muted)]">
-            Získávej XP a posouvej se od Nováčka až k CERMAT Slayerovi
+            Každý den se zlepšuješ. Vidíš, jak daleko jsi došel/došla!
           </p>
         </div>
 
         <div className="mc-panel-dark mc-panel">
           <div className="flex items-center gap-3 mb-2">
-            <Pickaxe className="w-6 h-6 text-[var(--color-stone)]" />
-            <h3 className="text-xl">Plň questy</h3>
+            <div className="emerald-icon scale-150" />
+            <h3 className="text-xl">Objevuj a zkoušej</h3>
           </div>
           <p className="text-sm text-[var(--foreground-muted)]">
-            Testy, doučování a příprava - každá aktivita se počítá
+            Testy, doučování, opravy chyb - každá zkušenost tě posouvá
           </p>
         </div>
 
         <div className="mc-panel-dark mc-panel">
           <div className="flex items-center gap-3 mb-2">
             <Shield className="w-6 h-6 text-[var(--color-diamond)]" />
-            <h3 className="text-xl">Udržuj streak</h3>
+            <h3 className="text-xl">Bez stresu</h3>
           </div>
           <p className="text-sm text-[var(--foreground-muted)]">
-            7 dní v řadě = Mystery Box s překvapením!
+            Týdenní cíle místo denního tlaku. Uč se vlastním tempem.
           </p>
         </div>
       </div>
@@ -89,7 +89,7 @@ export default function HomePage() {
 
       {/* Footer */}
       <p className="mt-12 text-sm text-[var(--foreground-muted)]">
-        Připrav se na přijímačky jako nikdy předtím
+        Tvoje cesta k úspěchu začíná tady
       </p>
     </main>
   )

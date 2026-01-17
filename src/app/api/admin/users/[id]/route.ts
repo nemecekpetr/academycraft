@@ -1,32 +1,26 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
-
-// Create admin client with service role key
-function createAdminClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-
-  if (!supabaseUrl || !supabaseServiceKey) {
-    throw new Error('Missing Supabase environment variables')
-  }
-
-  return createClient(supabaseUrl, supabaseServiceKey, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
-  })
-}
+import { createAdminClient, requireAdmin } from '@/lib/supabase/admin'
 
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Verify the user is admin and get their ID
+    const adminUserId = await requireAdmin()
+
     const { id } = await params
 
     if (!id) {
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 })
+    }
+
+    // Prevent self-delete
+    if (id === adminUserId) {
+      return NextResponse.json(
+        { error: 'Cannot delete your own account' },
+        { status: 400 }
+      )
     }
 
     const supabase = createAdminClient()
@@ -42,6 +36,12 @@ export async function DELETE(
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Delete user error:', error)
+    const message = error instanceof Error ? error.message : 'Unknown error'
+
+    if (message.includes('Unauthorized') || message.includes('Forbidden')) {
+      return NextResponse.json({ error: message }, { status: 403 })
+    }
+
     return NextResponse.json(
       { error: 'Failed to delete user' },
       { status: 500 }

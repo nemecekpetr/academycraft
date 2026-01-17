@@ -3,6 +3,12 @@ import { createClient } from '@/lib/supabase/server'
 import ShopItems from './ShopItems'
 import EmeraldCounter from '@/components/game/EmeraldCounter'
 
+/**
+ * Shop Page - Motivation 3.0 Note:
+ * The shop with emerald currency represents an "if-then" reward system that can
+ * undermine intrinsic motivation. Students are redirected to the dashboard.
+ * Parents and admins can still view pending purchases.
+ */
 export default async function ShopPage() {
   const supabase = await createClient()
 
@@ -14,12 +20,17 @@ export default async function ShopPage() {
     redirect('/login')
   }
 
-  // Get user profile for emerald balance and XP
+  // Get user profile for emerald balance, XP, and role
   const { data: profile } = await supabase
     .from('profiles')
-    .select('emeralds, xp')
+    .select('emeralds, xp, role')
     .eq('id', user.id)
     .single()
+
+  // Redirect students away from shop (Motivation 3.0)
+  if (profile?.role === 'student') {
+    redirect('/dashboard')
+  }
 
   // Get all active shop items
   const { data: items } = await supabase
@@ -43,7 +54,7 @@ export default async function ShopPage() {
     <main className="p-4 max-w-lg mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-[var(--color-emerald)]" style={{ textShadow: '2px 2px 0 #000' }}>
+          <h1 className="text-3xl font-bold text-[var(--theme-primary)]" style={{ textShadow: '2px 2px 0 #000' }}>
             Obchod
           </h1>
           <p className="text-[var(--foreground-muted)]">

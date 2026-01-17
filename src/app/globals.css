@@ -22,6 +22,21 @@
   --foreground-muted: #AAAAAA;
   --border: #1A1A1A;
   --border-light: #4A4A4A;
+
+  /* Theme CSS variables (defaults = minecraft theme) */
+  /* These are set by the blocking script and ThemeContext */
+  --theme-primary: #17DD62;
+  --theme-secondary: #5D8C3E;
+  --theme-accent: #FCEE4B;
+  --theme-xp: #7EFC20;
+  --theme-currency: #17DD62;
+  --theme-background: #2D2D2D;
+  --theme-background-light: #3D3D3D;
+  --theme-card: #1A1A1A;
+  --theme-text: #FFFFFF;
+  --theme-text-muted: #AAAAAA;
+  --theme-font-heading: 'Pixelify Sans', system-ui, sans-serif;
+  --theme-font-body: 'Inter', system-ui, sans-serif;
 }
 
 @theme inline {

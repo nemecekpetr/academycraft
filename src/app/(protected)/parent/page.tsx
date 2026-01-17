@@ -32,7 +32,7 @@ export default async function ParentPage() {
   // Get children (users with this parent_id)
   const { data: children } = await supabase
     .from('profiles')
-    .select('id, username, email, xp, emeralds, current_streak')
+    .select('id, username, email, xp, emeralds, adventure_points, current_streak, weekly_goal_days')
     .eq('parent_id', user.id)
 
   // Get pending activities for all children
@@ -50,8 +50,11 @@ export default async function ParentPage() {
       name: string
       xp_reward: number
       emerald_reward: number
+      adventure_points: number
       flawless_threshold: number | null
       max_score: number | null
+      purpose_message: string | null
+      skill_area: { name: string; color: string } | null
     } | null
   }> = []
 
@@ -66,7 +69,7 @@ export default async function ParentPage() {
         notes,
         submitted_at,
         user:profiles(username),
-        activity:activities(name, xp_reward, emerald_reward, flawless_threshold, max_score)
+        activity:activities(name, xp_reward, emerald_reward, adventure_points, flawless_threshold, max_score, purpose_message, skill_area:skill_areas(name, color))
       `)
       .in('user_id', childIds)
       .eq('status', 'pending')
@@ -105,12 +108,27 @@ export default async function ParentPage() {
     }
   }
 
+  // Get family adventures (Motivation 3.0)
+  const { data: familyAdventures } = await supabase
+    .from('family_adventures')
+    .select('*')
+    .eq('family_id', user.id)
+    .order('created_at', { ascending: false })
+
+  // Get adventure templates for inspiration
+  const { data: adventureTemplates } = await supabase
+    .from('adventure_templates')
+    .select('*')
+    .order('suggested_points', { ascending: true })
+
   return (
     <ParentDashboard
       profile={profile}
       children={children || []}
       pendingActivities={pendingActivities}
       pendingPurchases={pendingPurchases}
+      familyAdventures={familyAdventures || []}
+      adventureTemplates={adventureTemplates || []}
     />
   )
 }

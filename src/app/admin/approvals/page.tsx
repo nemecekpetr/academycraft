@@ -1,9 +1,12 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { createClient } from '@/lib/supabase/client'
-import { calculateStreakUpdate } from '@/lib/constants'
-import { Check, X, Clock, User, Scroll, Star, Loader2 } from 'lucide-react'
+import { Check, X, Clock, User, Scroll, Heart, Loader2, MessageCircle, Send } from 'lucide-react'
+
+interface SkillArea {
+  name: string
+  color: string
+}
 
 interface PendingActivity {
   id: string
@@ -15,19 +18,15 @@ interface PendingActivity {
   user: {
     username: string
     email: string
-    xp: number
-    emeralds: number
-    current_streak: number
-    longest_streak: number
-    last_activity_date: string | null
+    adventure_points: number
   } | null
   activity: {
     name: string
     icon: string
-    xp_reward: number
-    emerald_reward: number
-    flawless_threshold: number | null
+    adventure_points: number
     max_score: number | null
+    purpose_message: string | null
+    skill_area: SkillArea | null
   } | null
 }
 
@@ -35,124 +34,100 @@ export default function ApprovalsPage() {
   const [pendingActivities, setPendingActivities] = useState<PendingActivity[]>([])
   const [loading, setLoading] = useState(true)
   const [processingId, setProcessingId] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [recognitionMessages, setRecognitionMessages] = useState<Record<string, string>>({})
+  const [showRecognitionInput, setShowRecognitionInput] = useState<string | null>(null)
 
   useEffect(() => {
     loadPendingActivities()
   }, [])
 
   async function loadPendingActivities() {
-    const supabase = createClient()
+    try {
+      const response = await fetch('/api/admin/approvals')
+      const result = await response.json()
 
-    const { data, error } = await supabase
-      .from('completed_activities')
-      .select(`
-        id,
-        user_id,
-        activity_id,
-        score,
-        notes,
-        submitted_at,
-        user:profiles(username, email, xp, emeralds, current_streak, longest_streak, last_activity_date),
-        activity:activities(name, icon, xp_reward, emerald_reward, flawless_threshold, max_score)
-      `)
-      .eq('status', 'pending')
-      .order('submitted_at', { ascending: true })
+      if (!response.ok) {
+        setError(result.error || 'Failed to load activities')
+        setLoading(false)
+        return
+      }
 
-    if (!error && data) {
-      setPendingActivities(data as unknown as PendingActivity[])
+      setPendingActivities(result.data as PendingActivity[])
+    } catch (err) {
+      console.error('Error loading activities:', err)
+      setError('Nepodařilo se načíst aktivity')
     }
-
     setLoading(false)
   }
 
-  async function approveActivity(item: PendingActivity) {
+  async function approveActivity(item: PendingActivity, withRecognition: boolean = false) {
     if (!item.activity || !item.user) return
 
     setProcessingId(item.id)
-    const supabase = createClient()
+    setError(null)
 
-    // Calculate rewards
-    let xpEarned = item.activity.xp_reward
-    let emeraldsEarned = item.activity.emerald_reward
-    let isFlawless = false
+    try {
+      const response = await fetch('/api/admin/approvals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          activityId: item.id,
+          action: 'approve',
+          recognitionMessage: withRecognition ? recognitionMessages[item.id] : undefined,
+        }),
+      })
 
-    // Check for flawless bonus (2x rewards)
-    if (item.activity.flawless_threshold && item.score !== null) {
-      if (item.score >= item.activity.flawless_threshold) {
-        isFlawless = true
-        xpEarned *= 2
-        emeraldsEarned *= 2
+      const result = await response.json()
+
+      if (!response.ok) {
+        setError(result.error || 'Nepodařilo se schválit aktivitu')
+        setProcessingId(null)
+        return
       }
-    }
 
-    // Update the completed activity
-    const { error: activityError } = await supabase
-      .from('completed_activities')
-      .update({
-        status: 'approved',
-        reviewed_at: new Date().toISOString(),
-        xp_earned: xpEarned,
-        emeralds_earned: emeraldsEarned,
-        is_flawless: isFlawless,
+      // Remove from list
+      setPendingActivities(prev => prev.filter(a => a.id !== item.id))
+      setShowRecognitionInput(null)
+      setRecognitionMessages(prev => {
+        const updated = { ...prev }
+        delete updated[item.id]
+        return updated
       })
-      .eq('id', item.id)
-
-    if (activityError) {
-      console.error('Error approving activity:', activityError)
-      setProcessingId(null)
-      return
+    } catch (err) {
+      console.error('Error approving activity:', err)
+      setError('Nepodařilo se schválit aktivitu')
     }
 
-    // Calculate streak update
-    const streakUpdate = calculateStreakUpdate(
-      item.user.last_activity_date,
-      item.user.current_streak || 0,
-      item.user.longest_streak || 0
-    )
-
-    // Update user's XP, emeralds, and streak
-    const { error: userError } = await supabase
-      .from('profiles')
-      .update({
-        xp: (item.user.xp || 0) + xpEarned,
-        emeralds: (item.user.emeralds || 0) + emeraldsEarned,
-        last_activity_date: new Date().toISOString().split('T')[0],
-        current_streak: streakUpdate.newStreak,
-        longest_streak: streakUpdate.newLongestStreak,
-      })
-      .eq('id', item.user_id)
-
-    if (userError) {
-      console.error('Error updating user:', userError)
-    }
-
-    // Remove from list
-    setPendingActivities(prev => prev.filter(a => a.id !== item.id))
     setProcessingId(null)
   }
 
   async function rejectActivity(item: PendingActivity) {
     setProcessingId(item.id)
-    const supabase = createClient()
+    setError(null)
 
-    const { error } = await supabase
-      .from('completed_activities')
-      .update({
-        status: 'rejected',
-        reviewed_at: new Date().toISOString(),
-        xp_earned: 0,
-        emeralds_earned: 0,
-        is_flawless: false,
+    try {
+      const response = await fetch('/api/admin/approvals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ activityId: item.id, action: 'reject' }),
       })
-      .eq('id', item.id)
 
-    if (error) {
-      console.error('Error rejecting activity:', error)
-      setProcessingId(null)
-      return
+      const result = await response.json()
+
+      if (!response.ok) {
+        setError(result.error || 'Nepodařilo se zamítnout aktivitu')
+        setProcessingId(null)
+        return
+      }
+
+      // Remove from list
+      setPendingActivities(prev => prev.filter(a => a.id !== item.id))
+    } catch (err) {
+      console.error('Error rejecting activity:', err)
+      setError('Nepodařilo se zamítnout aktivitu')
     }
 
-    setPendingActivities(prev => prev.filter(a => a.id !== item.id))
     setProcessingId(null)
   }
 
@@ -169,9 +144,15 @@ export default function ApprovalsPage() {
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-white mb-2">Schvalování aktivit</h1>
         <p className="text-[var(--foreground-muted)]">
-          Přehled čekajících aktivit ke schválení
+          Přehled čekajících aktivit ke schválení (Motivace 3.0)
         </p>
       </div>
+
+      {error && (
+        <div className="mb-6 bg-red-500/20 border border-red-500 p-4 rounded-lg text-red-400">
+          {error}
+        </div>
+      )}
 
       {pendingActivities.length === 0 ? (
         <div className="bg-[#0f0f1a] border border-[#2a2a4e] rounded-xl p-12 text-center">
@@ -184,16 +165,18 @@ export default function ApprovalsPage() {
       ) : (
         <div className="space-y-4">
           {pendingActivities.map((item) => {
-            const isFlawless = item.activity?.flawless_threshold &&
-              item.score !== null &&
-              item.score >= item.activity.flawless_threshold
+            const activity = Array.isArray(item.activity) ? item.activity[0] : item.activity
+            const user = Array.isArray(item.user) ? item.user[0] : item.user
+            const skillArea = activity?.skill_area
+              ? (Array.isArray(activity.skill_area) ? activity.skill_area[0] : activity.skill_area)
+              : null
 
             return (
               <div
                 key={item.id}
                 className="bg-[#0f0f1a] border border-[#2a2a4e] rounded-xl p-6"
               >
-                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
                   {/* User & Activity Info */}
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
@@ -201,8 +184,8 @@ export default function ApprovalsPage() {
                         <User className="w-5 h-5 text-[var(--color-emerald)]" />
                       </div>
                       <div>
-                        <p className="font-bold text-white">{item.user?.username}</p>
-                        <p className="text-xs text-[var(--foreground-muted)]">{item.user?.email}</p>
+                        <p className="font-bold text-white">{user?.username}</p>
+                        <p className="text-xs text-[var(--foreground-muted)]">{user?.email}</p>
                       </div>
                     </div>
 
@@ -211,29 +194,44 @@ export default function ApprovalsPage() {
                         <Scroll className="w-5 h-5 text-[var(--color-gold)]" />
                       </div>
                       <div>
-                        <p className="font-bold text-white">{item.activity?.name}</p>
+                        <p className="font-bold text-white">{activity?.name}</p>
                         <p className="text-xs text-[var(--foreground-muted)]">
                           {new Date(item.submitted_at).toLocaleString('cs-CZ')}
                         </p>
-                      </div>
-                    </div>
-
-                    {/* Score & Notes */}
-                    {item.score !== null && (
-                      <div className="mt-4 flex items-center gap-2">
-                        <span className="text-[var(--foreground-muted)]">Skóre:</span>
-                        <span className={`font-bold ${isFlawless ? 'text-[var(--color-gold)]' : 'text-white'}`}>
-                          {item.score}/{item.activity?.max_score || 100}
-                        </span>
-                        {isFlawless && (
-                          <span className="flex items-center gap-1 text-xs bg-[var(--color-gold)]/20 text-[var(--color-gold)] px-2 py-1 rounded">
-                            <Star className="w-3 h-3" />
-                            FLAWLESS 2x
+                        {skillArea && (
+                          <span
+                            className="inline-block mt-1 text-xs px-2 py-0.5 rounded"
+                            style={{
+                              backgroundColor: `${skillArea.color}20`,
+                              color: skillArea.color
+                            }}
+                          >
+                            {skillArea.name}
                           </span>
                         )}
                       </div>
+                    </div>
+
+                    {/* Purpose message */}
+                    {activity?.purpose_message && (
+                      <div className="mt-3 p-3 bg-[var(--color-emerald)]/10 rounded-lg border border-[var(--color-emerald)]/20">
+                        <p className="text-sm text-[var(--color-emerald)] italic">
+                          „{activity.purpose_message}"
+                        </p>
+                      </div>
                     )}
 
+                    {/* Score */}
+                    {item.score !== null && activity?.max_score && (
+                      <div className="mt-3 flex items-center gap-2">
+                        <span className="text-[var(--foreground-muted)]">Skóre:</span>
+                        <span className="font-bold text-white">
+                          {item.score}/{activity.max_score}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Notes */}
                     {item.notes && (
                       <div className="mt-2 p-3 bg-[#1a1a2e] rounded-lg">
                         <p className="text-sm text-[var(--foreground-muted)]">{item.notes}</p>
@@ -242,26 +240,21 @@ export default function ApprovalsPage() {
                   </div>
 
                   {/* Rewards Preview */}
-                  <div className="flex flex-col items-center gap-2 px-6 py-4 bg-[#1a1a2e] rounded-xl">
-                    <p className="text-xs text-[var(--foreground-muted)] mb-2">Odměna</p>
-                    <div className="flex items-center gap-4">
-                      <div className="text-center">
-                        <p className={`text-xl font-bold ${isFlawless ? 'text-[var(--color-gold)]' : 'text-[var(--color-xp-green)]'}`}>
-                          +{(item.activity?.xp_reward || 0) * (isFlawless ? 2 : 1)}
-                        </p>
-                        <p className="text-xs text-[var(--foreground-muted)]">XP</p>
-                      </div>
-                      <div className="text-center">
-                        <p className={`text-xl font-bold ${isFlawless ? 'text-[var(--color-gold)]' : 'text-[var(--color-emerald)]'}`}>
-                          +{(item.activity?.emerald_reward || 0) * (isFlawless ? 2 : 1)}
-                        </p>
-                        <p className="text-xs text-[var(--foreground-muted)]">Emeraldy</p>
-                      </div>
+                  <div className="flex flex-col items-center gap-2 px-6 py-4 bg-[#1a1a2e] rounded-xl min-w-[140px]">
+                    <p className="text-xs text-[var(--foreground-muted)] mb-2">Rodinné body</p>
+                    <div className="flex items-center gap-2">
+                      <Heart className="w-6 h-6 text-pink-500" />
+                      <span className="text-2xl font-bold text-pink-500">
+                        +{activity?.adventure_points || 10}
+                      </span>
                     </div>
+                    <p className="text-xs text-[var(--foreground-muted)] text-center mt-2">
+                      Přispěje k rodinnému<br />dobrodružství
+                    </p>
                   </div>
 
                   {/* Actions */}
-                  <div className="flex gap-2">
+                  <div className="flex flex-col gap-2">
                     <button
                       onClick={() => rejectActivity(item)}
                       disabled={processingId === item.id}
@@ -286,8 +279,49 @@ export default function ApprovalsPage() {
                       )}
                       Schválit
                     </button>
+                    <button
+                      onClick={() => setShowRecognitionInput(showRecognitionInput === item.id ? null : item.id)}
+                      disabled={processingId === item.id}
+                      className="flex items-center gap-2 px-4 py-3 bg-purple-500/20 text-purple-400 rounded-lg hover:bg-purple-500/30 transition-colors disabled:opacity-50"
+                    >
+                      <MessageCircle className="w-5 h-5" />
+                      S uznáním
+                    </button>
                   </div>
                 </div>
+
+                {/* Recognition Input */}
+                {showRecognitionInput === item.id && (
+                  <div className="mt-4 pt-4 border-t border-[#2a2a4e]">
+                    <label className="block text-sm text-[var(--foreground-muted)] mb-2">
+                      Zpráva uznání (Now-That Recognition)
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={recognitionMessages[item.id] || ''}
+                        onChange={(e) => setRecognitionMessages(prev => ({ ...prev, [item.id]: e.target.value }))}
+                        placeholder="Např. Skvělá práce! Vidím, jak moc ses snažil/a."
+                        className="flex-1 px-4 py-2 bg-[#1a1a2e] border border-[#2a2a4e] rounded-lg text-white focus:border-purple-500 focus:outline-none"
+                      />
+                      <button
+                        onClick={() => approveActivity(item, true)}
+                        disabled={processingId === item.id || !recognitionMessages[item.id]?.trim()}
+                        className="flex items-center gap-2 px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors disabled:opacity-50"
+                      >
+                        {processingId === item.id ? (
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                        ) : (
+                          <Send className="w-5 h-5" />
+                        )}
+                        Schválit s uznáním
+                      </button>
+                    </div>
+                    <p className="text-xs text-[var(--foreground-muted)] mt-2">
+                      Tato zpráva se studentovi zobrazí jako nečekané uznání - motivuje víc než předvídatelná odměna.
+                    </p>
+                  </div>
+                )}
               </div>
             )
           })}

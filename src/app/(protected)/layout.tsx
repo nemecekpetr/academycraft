@@ -1,16 +1,17 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { useTheme } from '@/contexts/ThemeContext'
-import { getLevelFromXpWithTheme, getLevelProgressWithTheme, getXpToNextLevelWithTheme } from '@/lib/themes'
+import { getLevelFromXpWithTheme } from '@/lib/themes'
 import {
   LogOut,
   Menu,
   X,
-  Shield
+  Shield,
+  Settings
 } from 'lucide-react'
 
 interface Profile {
@@ -18,6 +19,7 @@ interface Profile {
   role: string
   xp: number
   emeralds: number
+  adventure_points: number
   theme: string | null
 }
 
@@ -33,11 +35,7 @@ export default function ProtectedLayout({
   const [profile, setProfile] = useState<Profile | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
-  useEffect(() => {
-    checkAuth()
-  }, [])
-
-  async function checkAuth() {
+  const checkAuth = useCallback(async () => {
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
 
@@ -48,7 +46,7 @@ export default function ProtectedLayout({
 
     const { data: profileData } = await supabase
       .from('profiles')
-      .select('username, role, xp, emeralds, theme')
+      .select('username, role, xp, emeralds, adventure_points, theme')
       .eq('id', user.id)
       .single()
 
@@ -56,7 +54,11 @@ export default function ProtectedLayout({
       setProfile(profileData)
     }
     setLoading(false)
-  }
+  }, [router])
+
+  useEffect(() => {
+    checkAuth()
+  }, [checkAuth])
 
   const handleLogout = async () => {
     const supabase = createClient()
@@ -75,10 +77,12 @@ export default function ProtectedLayout({
     )
   }
 
+  // Note: Shop removed from student navigation (Motivation 3.0: "if-then" rewards undermine intrinsic motivation)
+  // Parents/admins can still access it via /shop directly
   const navItems = [
     { href: '/dashboard', iconKey: 'home' as const, label: 'Domov' },
     { href: '/quests', iconKey: 'quests' as const, label: 'Questy' },
-    { href: '/shop', iconKey: 'shop' as const, label: 'Obchod' },
+    { href: '/adventures', iconKey: 'shop' as const, label: 'Dobrodružství' },
     { href: '/profile', iconKey: 'profile' as const, label: 'Profil' },
   ]
 
@@ -117,8 +121,7 @@ export default function ProtectedLayout({
           </Link>
           {profile && (() => {
             const level = getLevelFromXpWithTheme(profile.xp, themeId)
-            const progress = getLevelProgressWithTheme(profile.xp, themeId)
-            const xpToNext = getXpToNextLevelWithTheme(profile.xp, themeId)
+            const isStudent = profile.role === 'student'
 
             return (
               <div className="mt-3 p-3 rounded-lg" style={{ backgroundColor: theme.colors.backgroundLight }}>
@@ -127,38 +130,27 @@ export default function ProtectedLayout({
                   <span className="text-lg" title={level.name}>{level.icon}</span>
                 </div>
 
-                {/* Level badge */}
+                {/* Level badge - shown to everyone, but without XP for students (Motivation 3.0) */}
                 <div
                   className="mt-2 px-2 py-1 rounded text-xs font-bold inline-block"
                   style={{ backgroundColor: `${level.color}20`, color: level.color }}
                 >
-                  Lv.{level.level} {level.name}
+                  {level.name}
                 </div>
 
-                {/* XP Progress bar */}
-                <div className="mt-2">
-                  <div className="flex items-center justify-between text-xs mb-1">
-                    <span style={{ color: theme.colors.xp }}>{profile.xp} XP</span>
-                    {xpToNext !== null && (
-                      <span style={{ color: theme.colors.textMuted }}>
-                        dalších {xpToNext} XP
-                      </span>
-                    )}
+                {/* For students: Show adventure points (family contribution) instead of XP */}
+                {isStudent ? (
+                  <div className="mt-2 flex items-center gap-2 text-sm" style={{ color: theme.colors.primary }}>
+                    <span>❤️</span>
+                    <span className="font-medium">{profile.adventure_points || 0}</span>
+                    <span className="text-xs opacity-70">bodů pro rodinu</span>
                   </div>
-                  <div className="h-2 rounded-full overflow-hidden" style={{ backgroundColor: theme.colors.card }}>
-                    <div
-                      className="h-full transition-all duration-500"
-                      style={{ width: `${progress}%`, backgroundColor: theme.colors.xp }}
-                    />
+                ) : (
+                  /* For admin/parent: Show XP for reference */
+                  <div className="mt-2 text-xs" style={{ color: theme.colors.textMuted }}>
+                    {profile.xp} XP • {profile.emeralds} {theme.colors.currencyName}
                   </div>
-                </div>
-
-                {/* Currency */}
-                <div className="flex items-center gap-1 mt-2 text-sm" style={{ color: theme.colors.currency }}>
-                  <span>{theme.icons.currency}</span>
-                  <span className="font-medium">{profile.emeralds}</span>
-                  <span className="text-xs opacity-70">{theme.colors.currencyName}</span>
-                </div>
+                )}
               </div>
             )
           })()}
@@ -197,8 +189,20 @@ export default function ProtectedLayout({
           )}
         </nav>
 
-        {/* Logout button */}
+        {/* Bottom section */}
         <div className="absolute bottom-0 left-0 right-0 p-4 border-t-2" style={{ borderColor: theme.colors.backgroundLight }}>
+          <Link
+            href="/settings"
+            onClick={() => setSidebarOpen(false)}
+            className="flex items-center gap-3 px-4 py-3 rounded-lg transition-colors mb-1"
+            style={{
+              backgroundColor: pathname === '/settings' ? `${theme.colors.primary}20` : 'transparent',
+              color: pathname === '/settings' ? theme.colors.primary : theme.colors.textMuted
+            }}
+          >
+            <Settings className="w-5 h-5" />
+            Nastavení
+          </Link>
           <button
             onClick={handleLogout}
             className="flex items-center gap-3 px-4 py-3 rounded-lg w-full text-red-400 hover:bg-red-500/10 transition-colors"

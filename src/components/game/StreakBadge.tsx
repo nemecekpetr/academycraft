@@ -2,17 +2,17 @@
 
 import { Flame } from 'lucide-react'
 import { motion } from 'framer-motion'
-import { GAME_CONFIG } from '@/lib/constants'
 
 interface StreakBadgeProps {
   streak: number
   size?: 'sm' | 'md' | 'lg'
 }
 
+/**
+ * StreakBadge - Shows learning consistency without countdown pressure (Motivation 3.0)
+ * The streak is shown as a celebration of consistency, NOT as a countdown to rewards.
+ */
 export default function StreakBadge({ streak, size = 'md' }: StreakBadgeProps) {
-  const daysUntilBox = GAME_CONFIG.STREAK_MYSTERY_BOX_DAYS - (streak % GAME_CONFIG.STREAK_MYSTERY_BOX_DAYS)
-  const isNearBox = daysUntilBox <= 2
-
   const sizes = {
     sm: { icon: 'w-4 h-4', text: 'text-sm', padding: 'px-2 py-1' },
     md: { icon: 'w-5 h-5', text: 'text-base', padding: 'px-3 py-1.5' },
@@ -20,17 +20,15 @@ export default function StreakBadge({ streak, size = 'md' }: StreakBadgeProps) {
   }
 
   const getFlameColor = () => {
-    if (streak >= 30) return '#FF55FF' // Legendary purple
-    if (streak >= 14) return '#55FFFF' // Rare cyan
-    if (streak >= 7) return '#FCEE4B' // Gold
-    return '#FF6B35' // Orange
+    if (streak >= 30) return '#FF55FF' // Legendary purple - long-term dedication
+    if (streak >= 14) return '#55FFFF' // Rare cyan - growing consistency
+    if (streak >= 7) return '#FCEE4B' // Gold - building rhythm
+    return '#FF6B35' // Orange - getting started
   }
 
   return (
     <motion.div
       className={`inline-flex items-center gap-1.5 mc-panel-dark mc-panel ${sizes[size].padding}`}
-      animate={isNearBox ? { scale: [1, 1.05, 1] } : {}}
-      transition={{ repeat: isNearBox ? Infinity : 0, duration: 1 }}
     >
       <motion.div
         animate={{ y: [0, -2, 0] }}
@@ -44,11 +42,8 @@ export default function StreakBadge({ streak, size = 'md' }: StreakBadgeProps) {
       <span className={`${sizes[size].text} font-bold`} style={{ color: getFlameColor() }}>
         {streak}
       </span>
-      {isNearBox && streak > 0 && (
-        <span className="text-xs text-[var(--foreground-muted)] ml-1">
-          ({daysUntilBox} do boxu!)
-        </span>
-      )}
+      {/* NOTE: Removed countdown to mystery box - Motivation 3.0 principle:
+          External reward countdowns undermine intrinsic motivation */}
     </motion.div>
   )
 }

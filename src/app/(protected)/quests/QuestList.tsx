@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTheme } from '@/contexts/ThemeContext'
+import SessionReflection from '@/components/game/SessionReflection'
 import {
   Scroll,
   Brain,
@@ -16,9 +17,10 @@ import {
   Loader2,
   X,
   Check,
+  Sparkles,
   type LucideProps,
 } from 'lucide-react'
-import type { Activity, CompletedActivity } from '@/types/database'
+import type { Activity, CompletedActivity, SkillArea } from '@/types/database'
 
 const iconMap: Record<string, React.ComponentType<LucideProps>> = {
   scroll: Scroll,
@@ -29,20 +31,64 @@ const iconMap: Record<string, React.ComponentType<LucideProps>> = {
   star: Star,
 }
 
+// Check if string is an emoji (for DB-stored emoji icons)
+function isEmoji(str: string): boolean {
+  const emojiRegex = /[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/u
+  return emojiRegex.test(str)
+}
+
+// Default fallback messages for purpose (in case activity doesn't have one)
+const defaultPurposeMap: Record<string, string> = {
+  scroll: 'Každý test ti ukáže, co už umíš a kam směřovat dál. Chyby jsou součást učení!',
+  brain: 'Logické myšlení ti pomůže řešit problémy nejen ve škole, ale i v životě!',
+  'graduation-cap': 'Ptát se je super! Nejlepší studenti se nebojí požádat o pomoc.',
+  'book-open': '20 minut denně dělá velký rozdíl! Mozek se učí postupně.',
+  bug: 'Chyby jsou učitelé! Když pochopíš, proč se stala, příště to zvládneš.',
+  star: 'Každý krok vpřed se počítá!',
+}
+
+// Extended Activity type with skill area
+interface ActivityWithSkillArea extends Activity {
+  skill_area?: SkillArea | null
+}
+
 interface QuestListProps {
-  activities: Activity[]
+  activities: ActivityWithSkillArea[]
   pendingActivities: (CompletedActivity & { activity: { name: string; icon: string } | null })[]
   userId: string
+}
+
+// Icon component that handles both Lucide icons and emoji
+function ActivityIcon({ icon, size = 'md', color }: { icon: string; size?: 'sm' | 'md' | 'lg'; color: string }) {
+  const sizeClasses = {
+    sm: 'w-5 h-5',
+    md: 'w-6 h-6',
+    lg: 'w-8 h-8',
+  }
+  const emojiSizes = {
+    sm: 'text-lg',
+    md: 'text-2xl',
+    lg: 'text-3xl',
+  }
+
+  if (isEmoji(icon)) {
+    return <span className={emojiSizes[size]}>{icon}</span>
+  }
+
+  const Icon = iconMap[icon] || Star
+  return <Icon className={sizeClasses[size]} style={{ color }} />
 }
 
 export default function QuestList({ activities, pendingActivities, userId }: QuestListProps) {
   const { theme } = useTheme()
   const router = useRouter()
-  const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null)
+  const [selectedActivity, setSelectedActivity] = useState<ActivityWithSkillArea | null>(null)
   const [score, setScore] = useState('')
   const [notes, setNotes] = useState('')
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
+  const [showReflection, setShowReflection] = useState(false)
+  const [completedActivityName, setCompletedActivityName] = useState('')
 
   const handleSubmit = async () => {
     if (!selectedActivity) return
@@ -95,12 +141,7 @@ export default function QuestList({ activities, pendingActivities, userId }: Que
               parentName: parent.username,
               childName: profile.username,
               activityName: selectedActivity.name,
-              activityIcon: selectedActivity.icon === 'star' ? '⭐' :
-                            selectedActivity.icon === 'brain' ? '🧠' :
-                            selectedActivity.icon === 'graduation-cap' ? '🎓' :
-                            selectedActivity.icon === 'book-open' ? '📖' :
-                            selectedActivity.icon === 'bug' ? '🐛' :
-                            selectedActivity.icon === 'scroll' ? '📜' : '✅'
+              activityIcon: isEmoji(selectedActivity.icon) ? selectedActivity.icon : '✅'
             }),
           })
         }
@@ -111,112 +152,182 @@ export default function QuestList({ activities, pendingActivities, userId }: Que
     }
 
     setSuccess(true)
+    setCompletedActivityName(selectedActivity.name)
+
     setTimeout(() => {
       setSelectedActivity(null)
       setScore('')
       setNotes('')
       setSuccess(false)
-      router.refresh()
+      // Show reflection modal after success (Motivation 3.0 - Flow tracking)
+      setShowReflection(true)
     }, 1500)
 
     setLoading(false)
   }
 
+  const handleReflectionClose = () => {
+    setShowReflection(false)
+    setCompletedActivityName('')
+    router.refresh()
+  }
+
+  // Format relative time for pending activities
+  const formatRelativeTime = (dateStr: string) => {
+    const date = new Date(dateStr)
+    const now = new Date()
+    const diffMs = now.getTime() - date.getTime()
+    const diffMins = Math.floor(diffMs / 60000)
+    const diffHours = Math.floor(diffMins / 60)
+    const diffDays = Math.floor(diffHours / 24)
+
+    if (diffMins < 1) return 'Právě teď'
+    if (diffMins < 60) return `Před ${diffMins} min`
+    if (diffHours < 24) return `Před ${diffHours} h`
+    if (diffDays === 1) return 'Včera'
+    return `Před ${diffDays} dny`
+  }
+
   return (
     <>
-      {/* Pending Activities */}
+      {/* Session Reflection Modal (Motivation 3.0 - Flow tracking) */}
+      <SessionReflection
+        isOpen={showReflection}
+        onClose={handleReflectionClose}
+        activityName={completedActivityName}
+      />
+
+      {/* Pending Activities - Improved UX */}
       {pendingActivities.length > 0 && (
         <div className="mb-6">
           <h2 className="text-lg font-bold mb-3 flex items-center gap-2" style={{ color: theme.colors.text }}>
             <Clock className="w-5 h-5" style={{ color: theme.colors.accent }} />
             Čeká na schválení ({pendingActivities.length})
           </h2>
-          <div className="grid grid-cols-3 gap-2">
-            {pendingActivities.map((item) => {
-              const Icon = iconMap[item.activity?.icon || 'star'] || Star
-              return (
+          <div className="space-y-2">
+            {pendingActivities.map((item) => (
+              <motion.div
+                key={item.id}
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="flex items-center gap-3 p-3 rounded-xl border-2"
+                style={{
+                  backgroundColor: theme.colors.backgroundLight,
+                  borderColor: `${theme.colors.accent}30`,
+                }}
+              >
+                {/* Icon */}
                 <div
-                  key={item.id}
-                  className="text-center p-3 border-2 rounded-xl"
-                  style={{
-                    backgroundColor: theme.colors.backgroundLight,
-                    borderColor: theme.colors.backgroundLight,
-                    opacity: 0.7
-                  }}
+                  className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
+                  style={{ backgroundColor: `${theme.colors.accent}20` }}
                 >
-                  <div
-                    className="w-10 h-10 rounded-lg flex items-center justify-center mx-auto mb-1"
-                    style={{ backgroundColor: `${theme.colors.accent}20` }}
-                  >
-                    <Icon className="w-5 h-5" style={{ color: theme.colors.accent }} />
-                  </div>
-                  <h3
-                    className="font-bold text-xs mb-1 line-clamp-2 min-h-[2rem]"
-                    style={{ color: theme.colors.textMuted }}
-                  >
-                    {item.activity?.name}
-                  </h3>
-                  <span
-                    className="text-[10px] px-1.5 py-0.5 rounded inline-block"
-                    style={{
-                      backgroundColor: `${theme.colors.accent}20`,
-                      color: theme.colors.accent
-                    }}
-                  >
-                    Čeká
-                  </span>
+                  <ActivityIcon
+                    icon={item.activity?.icon || 'star'}
+                    size="md"
+                    color={theme.colors.accent}
+                  />
                 </div>
-              )
-            })}
+
+                {/* Info */}
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-bold text-sm" style={{ color: theme.colors.text }}>
+                    {item.activity?.name || 'Aktivita'}
+                  </h3>
+                  <p className="text-xs" style={{ color: theme.colors.textMuted }}>
+                    {formatRelativeTime(item.submitted_at)} · Čeká na rodiče
+                  </p>
+                </div>
+
+                {/* Status indicator */}
+                <div className="flex-shrink-0">
+                  <motion.div
+                    className="w-3 h-3 rounded-full"
+                    style={{ backgroundColor: theme.colors.accent }}
+                    animate={{ scale: [1, 1.2, 1], opacity: [1, 0.7, 1] }}
+                    transition={{ duration: 2, repeat: Infinity }}
+                  />
+                </div>
+              </motion.div>
+            ))}
           </div>
         </div>
       )}
 
-      {/* Available Activities */}
+      {/* Available Activities - Single column on mobile */}
       <h2 className="text-lg font-bold mb-3" style={{ color: theme.colors.text }}>
         {theme.icons.quests} Dostupné questy
       </h2>
-      <div className="grid grid-cols-3 gap-2">
+      <div className="space-y-3">
         {activities.map((activity) => {
-          const Icon = iconMap[activity.icon] || Star
-
           return (
             <motion.button
               key={activity.id}
               onClick={() => setSelectedActivity(activity)}
-              title={activity.description || undefined}
-              className="text-center p-3 border-2 rounded-xl cursor-pointer transition-all"
+              className="w-full text-left p-4 border-2 rounded-xl cursor-pointer transition-all"
               style={{
                 backgroundColor: theme.colors.card,
                 borderColor: theme.colors.backgroundLight
               }}
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
+              whileHover={{ scale: 1.01, borderColor: theme.colors.primary }}
+              whileTap={{ scale: 0.99 }}
             >
-              {/* Icon */}
-              <div
-                className="w-10 h-10 rounded-lg flex items-center justify-center mx-auto mb-1"
-                style={{ backgroundColor: `${theme.colors.primary}20` }}
-              >
-                <Icon className="w-5 h-5" style={{ color: theme.colors.primary }} />
-              </div>
+              <div className="flex items-center gap-4">
+                {/* Icon - Larger */}
+                <div
+                  className="w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0"
+                  style={{ backgroundColor: `${theme.colors.primary}15` }}
+                >
+                  <ActivityIcon
+                    icon={activity.icon}
+                    size="lg"
+                    color={theme.colors.primary}
+                  />
+                </div>
 
-              {/* Name */}
-              <h3
-                className="font-bold text-xs mb-1 line-clamp-2 min-h-[2rem]"
-                style={{ color: theme.colors.text }}
-              >
-                {activity.name}
-              </h3>
+                <div className="flex-1 min-w-0">
+                  {/* Name - No truncation */}
+                  <h3
+                    className="font-bold text-base mb-1"
+                    style={{ color: theme.colors.text }}
+                  >
+                    {activity.name}
+                  </h3>
 
-              {/* Rewards */}
-              <div className="flex items-center justify-center gap-2 text-xs">
-                <span className="flex items-center gap-0.5" style={{ color: theme.colors.xp }}>
-                  {theme.icons.xp} {activity.xp_reward}
-                </span>
-                <span className="flex items-center gap-0.5" style={{ color: theme.colors.currency }}>
-                  {theme.icons.currency} {activity.emerald_reward}
-                </span>
+                  {/* Skill Area Badge */}
+                  {activity.skill_area && (
+                    <span
+                      className="text-xs px-2 py-0.5 rounded-full inline-block"
+                      style={{
+                        backgroundColor: `${activity.skill_area.color}20`,
+                        color: activity.skill_area.color
+                      }}
+                    >
+                      {activity.skill_area.name}
+                    </span>
+                  )}
+                </div>
+
+                {/* Points - Prominent display */}
+                <div
+                  className="flex-shrink-0 text-center px-3 py-2 rounded-xl"
+                  style={{ backgroundColor: `${theme.colors.primary}15` }}
+                >
+                  <div className="flex items-center gap-1">
+                    <Sparkles className="w-4 h-4" style={{ color: theme.colors.primary }} />
+                    <span
+                      className="font-bold text-lg"
+                      style={{ color: theme.colors.primary }}
+                    >
+                      +{activity.adventure_points}
+                    </span>
+                  </div>
+                  <span
+                    className="text-[10px] block"
+                    style={{ color: theme.colors.textMuted }}
+                  >
+                    bodů
+                  </span>
+                </div>
               </div>
             </motion.button>
           )
@@ -255,24 +366,62 @@ export default function QuestList({ activities, pendingActivities, userId }: Que
                     <Check className="w-8 h-8 text-white" />
                   </motion.div>
                   <h3 className="text-xl font-bold" style={{ color: theme.colors.primary }}>
-                    Quest odeslán!
+                    Skvělá práce!
                   </h3>
                   <p style={{ color: theme.colors.textMuted }}>
-                    Čeká na schválení
+                    Tvoje snaha se počítá. Čeká na potvrzení.
                   </p>
                 </div>
               ) : (
                 <>
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-xl font-bold" style={{ color: theme.colors.text }}>
-                      {selectedActivity.name}
-                    </h3>
+                  {/* Header with close button */}
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="w-12 h-12 rounded-xl flex items-center justify-center"
+                        style={{ backgroundColor: `${theme.colors.primary}15` }}
+                      >
+                        <ActivityIcon
+                          icon={selectedActivity.icon}
+                          size="md"
+                          color={theme.colors.primary}
+                        />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-bold" style={{ color: theme.colors.text }}>
+                          {selectedActivity.name}
+                        </h3>
+                        {selectedActivity.skill_area && (
+                          <span
+                            className="text-xs px-2 py-0.5 rounded-full inline-block"
+                            style={{
+                              backgroundColor: `${selectedActivity.skill_area.color}20`,
+                              color: selectedActivity.skill_area.color
+                            }}
+                          >
+                            {selectedActivity.skill_area.name}
+                          </span>
+                        )}
+                      </div>
+                    </div>
                     <button
                       onClick={() => setSelectedActivity(null)}
+                      className="p-1"
                       style={{ color: theme.colors.textMuted }}
                     >
                       <X className="w-6 h-6" />
                     </button>
+                  </div>
+
+                  {/* Reward preview */}
+                  <div
+                    className="flex items-center justify-center gap-2 mb-4 p-3 rounded-xl"
+                    style={{ backgroundColor: `${theme.colors.primary}10` }}
+                  >
+                    <Sparkles className="w-5 h-5" style={{ color: theme.colors.primary }} />
+                    <span className="font-bold text-lg" style={{ color: theme.colors.primary }}>
+                      +{selectedActivity.adventure_points} bodů pro rodinu
+                    </span>
                   </div>
 
                   {/* Description */}
@@ -282,33 +431,25 @@ export default function QuestList({ activities, pendingActivities, userId }: Que
                     </p>
                   )}
 
-                  {/* Rewards */}
+                  {/* Why Learning This? - Growth Mindset (Motivation 3.0) */}
                   <div
-                    className="flex items-center gap-4 mb-6 p-3 rounded-lg"
-                    style={{ backgroundColor: theme.colors.backgroundLight }}
+                    className="mb-5 p-3 rounded-lg border-l-4"
+                    style={{
+                      backgroundColor: `${theme.colors.primary}08`,
+                      borderLeftColor: selectedActivity.skill_area?.color || theme.colors.primary
+                    }}
                   >
-                    <div className="flex items-center gap-1">
-                      <span className="text-lg">{theme.icons.xp}</span>
-                      <span className="font-bold" style={{ color: theme.colors.xp }}>
-                        +{selectedActivity.xp_reward} XP
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <span className="text-lg">{theme.icons.currency}</span>
-                      <span className="font-bold" style={{ color: theme.colors.currency }}>
-                        +{selectedActivity.emerald_reward}
-                      </span>
-                    </div>
-                    {selectedActivity.flawless_threshold && (
-                      <div className="text-xs" style={{ color: theme.colors.accent }}>
-                        ✨ {selectedActivity.flawless_threshold}+ = 2x
-                      </div>
-                    )}
+                    <p className="text-xs font-bold mb-1" style={{ color: theme.colors.primary }}>
+                      💡 Proč se to učím?
+                    </p>
+                    <p className="text-sm" style={{ color: theme.colors.text }}>
+                      {selectedActivity.purpose_message || defaultPurposeMap[selectedActivity.icon] || 'Každý krok vpřed se počítá!'}
+                    </p>
                   </div>
 
                   {selectedActivity.requires_score && (
                     <div className="mb-4">
-                      <label className="block mb-2 text-sm" style={{ color: theme.colors.text }}>
+                      <label className="block mb-2 text-sm font-medium" style={{ color: theme.colors.text }}>
                         Skóre (0-{selectedActivity.max_score}) *
                       </label>
                       <input
@@ -317,7 +458,7 @@ export default function QuestList({ activities, pendingActivities, userId }: Que
                         max={selectedActivity.max_score || 100}
                         value={score}
                         onChange={(e) => setScore(e.target.value)}
-                        className="w-full px-4 py-3 rounded-lg border-2 outline-none transition-colors"
+                        className="w-full px-4 py-3 rounded-lg border-2 outline-none transition-colors text-lg"
                         style={{
                           backgroundColor: theme.colors.background,
                           borderColor: theme.colors.backgroundLight,
@@ -329,31 +470,27 @@ export default function QuestList({ activities, pendingActivities, userId }: Que
                     </div>
                   )}
 
-                  <div className="mb-6">
-                    <label className="block mb-2 text-sm" style={{ color: theme.colors.text }}>
+                  <div className="mb-5">
+                    <label className="block mb-2 text-sm font-medium" style={{ color: theme.colors.text }}>
                       Poznámka (volitelné)
                     </label>
                     <textarea
                       value={notes}
                       onChange={(e) => setNotes(e.target.value)}
-                      className="w-full h-24 px-4 py-3 rounded-lg border-2 outline-none resize-none transition-colors"
+                      className="w-full h-20 px-4 py-3 rounded-lg border-2 outline-none resize-none transition-colors"
                       style={{
                         backgroundColor: theme.colors.background,
                         borderColor: theme.colors.backgroundLight,
                         color: theme.colors.text
                       }}
-                      placeholder={
-                        selectedActivity.icon === 'bug'
-                          ? 'Vysvětli, proč jsi udělal/a chybu...'
-                          : 'Nějaké poznámky k aktivitě...'
-                      }
+                      placeholder="Nějaké poznámky k aktivitě..."
                     />
                   </div>
 
                   <button
                     onClick={handleSubmit}
                     disabled={loading || (selectedActivity.requires_score && !score)}
-                    className="w-full py-3 px-4 rounded-lg font-bold text-white flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+                    className="w-full py-4 px-4 rounded-xl font-bold text-white text-lg flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
                     style={{ backgroundColor: theme.colors.primary }}
                   >
                     {loading ? (
@@ -362,7 +499,10 @@ export default function QuestList({ activities, pendingActivities, userId }: Que
                         Odesílám...
                       </>
                     ) : (
-                      'Odeslat ke schválení'
+                      <>
+                        <Check className="w-5 h-5" />
+                        Hotovo!
+                      </>
                     )}
                   </button>
                 </>

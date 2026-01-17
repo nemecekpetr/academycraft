@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import {
   Search,
   Plus,
@@ -12,11 +11,14 @@ import {
   User,
   Users,
   Crown,
-  Gem,
   X,
   Save,
-  Loader2
+  Loader2,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react'
+
+const USERS_PER_PAGE = 20
 
 interface Profile {
   id: string
@@ -53,6 +55,8 @@ export default function AdminUsersPage() {
   })
   const [createError, setCreateError] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     loadUsers()
@@ -75,18 +79,29 @@ export default function AdminUsersPage() {
     }
 
     setFilteredUsers(filtered)
+    setCurrentPage(1)
   }, [users, searchQuery, roleFilter])
 
-  async function loadUsers() {
-    const supabase = createClient()
-    const { data } = await supabase
-      .from('profiles')
-      .select('*')
-      .order('created_at', { ascending: false })
+  const totalPages = Math.ceil(filteredUsers.length / USERS_PER_PAGE)
+  const startIndex = (currentPage - 1) * USERS_PER_PAGE
+  const paginatedUsers = filteredUsers.slice(startIndex, startIndex + USERS_PER_PAGE)
 
-    if (data) {
-      setUsers(data)
-      setFilteredUsers(data)
+  async function loadUsers() {
+    try {
+      const response = await fetch('/api/admin/users')
+      const result = await response.json()
+
+      if (!response.ok) {
+        setError(result.error || 'Failed to load users')
+        setLoading(false)
+        return
+      }
+
+      setUsers(result.data || [])
+      setFilteredUsers(result.data || [])
+    } catch (err) {
+      console.error('Error loading users:', err)
+      setError('Nepodařilo se načíst uživatele')
     }
     setLoading(false)
   }
@@ -94,25 +109,39 @@ export default function AdminUsersPage() {
   async function saveUser() {
     if (!selectedUser) return
     setSaving(true)
+    setError(null)
 
-    const supabase = createClient()
-    const { error } = await supabase
-      .from('profiles')
-      .update({
-        username: editForm.username,
-        full_name: editForm.full_name,
-        role: editForm.role,
-        parent_id: editForm.parent_id,
-        xp: editForm.xp,
-        emeralds: editForm.emeralds,
-        is_banned: editForm.is_banned,
+    try {
+      const response = await fetch('/api/admin/users', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: selectedUser.id,
+          username: editForm.username,
+          full_name: editForm.full_name,
+          role: editForm.role,
+          parent_id: editForm.parent_id,
+          xp: editForm.xp,
+          emeralds: editForm.emeralds,
+          is_banned: editForm.is_banned,
+        }),
       })
-      .eq('id', selectedUser.id)
 
-    if (!error) {
-      setUsers(users.map(u => u.id === selectedUser.id ? { ...u, ...editForm } : u))
-      setSelectedUser({ ...selectedUser, ...editForm } as Profile)
+      const result = await response.json()
+
+      if (!response.ok) {
+        setError(result.error || 'Nepodařilo se uložit změny')
+        setSaving(false)
+        return
+      }
+
+      const updatedUser = result.user
+      setUsers(users.map(u => u.id === selectedUser.id ? updatedUser : u))
+      setSelectedUser(updatedUser)
       setEditMode(false)
+    } catch (err) {
+      console.error('Error saving user:', err)
+      setError('Nepodařilo se uložit změny')
     }
 
     setSaving(false)
@@ -133,25 +162,37 @@ export default function AdminUsersPage() {
         const data = await response.json()
         alert(`Chyba při mazání: ${data.error || 'Neznámá chyba'}`)
       }
-    } catch (error) {
-      console.error('Error deleting user:', error)
+    } catch (err) {
+      console.error('Error deleting user:', err)
       alert('Nepodařilo se smazat uživatele')
     }
   }
 
   async function toggleBan(user: Profile) {
-    const supabase = createClient()
-    const { error } = await supabase
-      .from('profiles')
-      .update({ is_banned: !user.is_banned })
-      .eq('id', user.id)
+    try {
+      const response = await fetch('/api/admin/users', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.id,
+          is_banned: !user.is_banned,
+        }),
+      })
 
-    if (!error) {
-      const updated = { ...user, is_banned: !user.is_banned }
-      setUsers(users.map(u => u.id === user.id ? updated : u))
-      if (selectedUser?.id === user.id) {
-        setSelectedUser(updated)
+      if (response.ok) {
+        const result = await response.json()
+        const updatedUser = result.user
+        setUsers(users.map(u => u.id === user.id ? updatedUser : u))
+        if (selectedUser?.id === user.id) {
+          setSelectedUser(updatedUser)
+        }
+      } else {
+        const data = await response.json()
+        alert(`Chyba: ${data.error || 'Nepodařilo se změnit stav'}`)
       }
+    } catch (err) {
+      console.error('Error toggling ban:', err)
+      alert('Nepodařilo se změnit stav uživatele')
     }
   }
 
@@ -159,6 +200,7 @@ export default function AdminUsersPage() {
     setSelectedUser(user)
     setEditForm(user)
     setEditMode(false)
+    setError(null)
   }
 
   async function createUser() {
@@ -191,10 +233,8 @@ export default function AdminUsersPage() {
         return
       }
 
-      // Reload users list
       await loadUsers()
 
-      // Reset form and close modal
       setCreateForm({
         email: '',
         password: '',
@@ -203,8 +243,8 @@ export default function AdminUsersPage() {
         role: 'student',
       })
       setShowCreateModal(false)
-    } catch (error) {
-      console.error('Error creating user:', error)
+    } catch (err) {
+      console.error('Error creating user:', err)
       setCreateError('Nepodařilo se vytvořit uživatele')
     }
 
@@ -253,6 +293,12 @@ export default function AdminUsersPage() {
           Správa všech uživatelů v systému
         </p>
       </div>
+
+      {error && (
+        <div className="mb-6 bg-red-500/20 border border-red-500 p-4 rounded-lg text-red-400">
+          {error}
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-4 mb-6">
@@ -304,7 +350,7 @@ export default function AdminUsersPage() {
               </tr>
             </thead>
             <tbody>
-              {filteredUsers.map((user) => (
+              {paginatedUsers.map((user) => (
                 <tr
                   key={user.id}
                   className="border-b border-[#2a2a4e] hover:bg-[#1a1a2e] cursor-pointer"
@@ -364,6 +410,34 @@ export default function AdminUsersPage() {
           </table>
         </div>
       </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="mt-6 flex items-center justify-between">
+          <p className="text-sm text-[var(--foreground-muted)]">
+            Zobrazeno {startIndex + 1}-{Math.min(startIndex + USERS_PER_PAGE, filteredUsers.length)} z {filteredUsers.length}
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className="p-2 rounded-lg bg-[#2a2a4e] hover:bg-[#3a3a5e] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            <span className="px-4 py-2 text-sm">
+              Stránka {currentPage} z {totalPages}
+            </span>
+            <button
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+              className="p-2 rounded-lg bg-[#2a2a4e] hover:bg-[#3a3a5e] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* User Detail Modal */}
       {selectedUser && (

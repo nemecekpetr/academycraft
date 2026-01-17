@@ -1,25 +1,34 @@
 // Game economy constants
 export const GAME_CONFIG = {
-  // XP per level
-  XP_PER_LEVEL: 1000,
-
-  // Streak bonuses
-  STREAK_MYSTERY_BOX_DAYS: 7,
+  // Weekly goal system (Motivation 3.0 - no daily pressure)
+  WEEKLY_GOAL_ACTIVITIES: 5, // Target activities per week
+  STREAK_MYSTERY_BOX_DAYS: 7, // Keep for backward compatibility
   DAILY_STREAK_XP: 50,
   DAILY_STREAK_EMERALDS: 5,
 
-  // Flawless victory bonus (2x emeralds)
-  FLAWLESS_MULTIPLIER: 2,
+  // NOTE: Flawless bonus removed - external rewards undermine intrinsic motivation (Motivation 3.0)
+  // FLAWLESS_MULTIPLIER: 2, // DEPRECATED - Do not use
+
+  // Growth mindset messages - shown randomly after completing activities
+  ENCOURAGEMENT_MESSAGES: [
+    'Skvělá snaha! Každé cvičení tě posouvá dál.',
+    'Vidím tvůj pokrok! Nevzdávej se.',
+    'Chyby jsou součást učení. Jdeš na to správně!',
+    'Tvoje vytrvalost se vyplácí!',
+    'Líbí se mi, jak ses do toho pustil/a!',
+    'Mozek roste, když se učíš nové věci!',
+    'Další krok na cestě k mistrovství!',
+  ],
 } as const
 
-// Level titles based on Minecraft armor progression
-export const LEVEL_TITLES = [
-  { min: 1, max: 10, title: 'Nováček', armor: 'leather', color: '#8B4513' },
-  { min: 11, max: 20, title: 'Železný Scholar', armor: 'iron', color: '#C0C0C0' },
-  { min: 21, max: 30, title: 'Diamantový Expert', armor: 'diamond', color: '#00CED1' },
-  { min: 31, max: 40, title: 'Netheritový Mistr', armor: 'netherite', color: '#4A4A4A' },
-  { min: 41, max: 50, title: 'CERMAT Slayer', armor: 'enchanted', color: '#9932CC' },
-] as const
+// Get random encouragement message
+export function getRandomEncouragement(): string {
+  const messages = GAME_CONFIG.ENCOURAGEMENT_MESSAGES
+  return messages[Math.floor(Math.random() * messages.length)]
+}
+
+// NOTE: Level system is now unified in levels.ts
+// Use getLevelFromXp() from levels.ts or getLevelFromXpWithTheme() from themes.ts
 
 // Mystery box reward tiers
 export const MYSTERY_BOX_TIERS = {
@@ -52,11 +61,12 @@ export const MYSTERY_BOX_TIERS = {
   },
 } as const
 
-// Default activities
+// Default activities with Growth Mindset messaging
 export const DEFAULT_ACTIVITIES = [
   {
     name: 'CERMAT Test (celý)',
-    description: 'Kompletní přijímací test v časovém limitu',
+    description: 'Vyzkoušej si kompletní test a zjisti, kde se můžeš zlepšit',
+    why_learning: 'Každý test ti ukáže, co už umíš a kam směřovat dál. Chyby jsou součást učení!',
     xp_reward: 500,
     emerald_reward: 50,
     icon: 'scroll',
@@ -67,7 +77,8 @@ export const DEFAULT_ACTIVITIES = [
   },
   {
     name: 'Scio Test',
-    description: 'Test obecných studijních předpokladů',
+    description: 'Trénuj logické myšlení a obecné dovednosti',
+    why_learning: 'Logické myšlení ti pomůže řešit problémy nejen ve škole, ale i v životě!',
     xp_reward: 400,
     emerald_reward: 40,
     icon: 'brain',
@@ -78,7 +89,8 @@ export const DEFAULT_ACTIVITIES = [
   },
   {
     name: 'Doučování (1 hodina)',
-    description: 'Účast na doučování - online nebo osobně',
+    description: 'Uč se s někým, kdo ti může pomoct pochopit těžší věci',
+    why_learning: 'Ptát se je super! Nejlepší studenti se nebojí požádat o pomoc.',
     xp_reward: 200,
     emerald_reward: 20,
     icon: 'graduation-cap',
@@ -89,7 +101,8 @@ export const DEFAULT_ACTIVITIES = [
   },
   {
     name: 'Domácí příprava (20 min)',
-    description: 'Soustředěná práce na procvičování',
+    description: 'Soustředěná práce - i malý krok vpřed se počítá',
+    why_learning: '20 minut denně dělá velký rozdíl! Mozek se učí postupně.',
     xp_reward: 100,
     emerald_reward: 10,
     icon: 'book-open',
@@ -100,7 +113,8 @@ export const DEFAULT_ACTIVITIES = [
   },
   {
     name: 'Oprava chyby',
-    description: 'Analýza a pochopení vlastní chyby',
+    description: 'Rozbor chyby - nejlepší způsob, jak se posunout dál',
+    why_learning: 'Chyby jsou učitelé! Když pochopíš, proč se stala, příště to zvládneš.',
     xp_reward: 50,
     emerald_reward: 5,
     icon: 'bug',
@@ -163,23 +177,8 @@ export const DEFAULT_SHOP_ITEMS = [
   },
 ] as const
 
-// Helper functions
-export function calculateLevel(xp: number): number {
-  return Math.floor(xp / GAME_CONFIG.XP_PER_LEVEL) + 1
-}
-
-export function calculateXpProgress(xp: number): { current: number; needed: number; percentage: number } {
-  const currentLevelXp = xp % GAME_CONFIG.XP_PER_LEVEL
-  return {
-    current: currentLevelXp,
-    needed: GAME_CONFIG.XP_PER_LEVEL,
-    percentage: (currentLevelXp / GAME_CONFIG.XP_PER_LEVEL) * 100,
-  }
-}
-
-export function getLevelInfo(level: number) {
-  return LEVEL_TITLES.find((t) => level >= t.min && level <= t.max) || LEVEL_TITLES[LEVEL_TITLES.length - 1]
-}
+// NOTE: calculateLevel, calculateXpProgress, getLevelInfo removed
+// Use getLevelFromXp/getLevelProgress from levels.ts instead
 
 export function rollMysteryBox(): { tier: 'common' | 'rare' | 'legendary'; reward: string } {
   const roll = Math.random()
@@ -206,6 +205,25 @@ export interface StreakUpdate {
   isConsecutive: boolean
 }
 
+// Czech timezone for streak calculations
+const CZ_TIMEZONE = 'Europe/Prague'
+
+/**
+ * Get today's date in Czech timezone as YYYY-MM-DD string
+ */
+function getTodayInCzechTimezone(): string {
+  return new Date().toLocaleDateString('sv-SE', { timeZone: CZ_TIMEZONE })
+}
+
+/**
+ * Calculate days difference between two dates (in local CZ context)
+ */
+function getDaysDifference(dateString: string, todayString: string): number {
+  const date = new Date(dateString + 'T00:00:00')
+  const today = new Date(todayString + 'T00:00:00')
+  return Math.floor((today.getTime() - date.getTime()) / (1000 * 60 * 60 * 24))
+}
+
 /**
  * Calculate streak update based on last activity date
  * @param lastActivityDate - ISO date string (YYYY-MM-DD) or null
@@ -218,7 +236,7 @@ export function calculateStreakUpdate(
   currentStreak: number,
   longestStreak: number
 ): StreakUpdate {
-  const today = new Date().toISOString().split('T')[0]
+  const today = getTodayInCzechTimezone()
 
   // If no previous activity, start streak at 1
   if (!lastActivityDate) {
@@ -240,10 +258,8 @@ export function calculateStreakUpdate(
     }
   }
 
-  // Calculate days difference
-  const lastDate = new Date(lastActivityDate)
-  const todayDate = new Date(today)
-  const diffDays = Math.floor((todayDate.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24))
+  // Calculate days difference using CZ timezone
+  const diffDays = getDaysDifference(lastActivityDate, today)
 
   // Consecutive day (yesterday) - increment streak
   if (diffDays === 1) {
@@ -266,16 +282,21 @@ export function calculateStreakUpdate(
 }
 
 /**
+ * Get today's date in Czech timezone (for storing in DB)
+ */
+export function getTodayCzech(): string {
+  return getTodayInCzechTimezone()
+}
+
+/**
  * Check if streak should be reset (when loading user data)
  * Returns true if more than 1 day has passed since last activity
  */
 export function shouldResetStreak(lastActivityDate: string | null): boolean {
   if (!lastActivityDate) return false
 
-  const today = new Date().toISOString().split('T')[0]
-  const todayDate = new Date(today)
-  const lastDate = new Date(lastActivityDate)
-  const diffDays = Math.floor((todayDate.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24))
+  const today = getTodayInCzechTimezone()
+  const diffDays = getDaysDifference(lastActivityDate, today)
 
   // Reset if more than 1 day has passed
   return diffDays > 1

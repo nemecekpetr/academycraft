@@ -3,161 +3,207 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useTheme } from '@/contexts/ThemeContext'
-import { getLevelFromXpWithTheme } from '@/lib/themes'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
+  Users,
+  Sparkles,
+  Heart,
+  Calendar,
+  BookOpen,
   Trophy,
-  Medal,
-  Crown,
-  Flame,
-  TrendingUp,
-  TrendingDown,
-  Minus,
   Star,
-  ChevronUp
+  Compass,
+  TrendingUp,
+  MessageCircle
 } from 'lucide-react'
 
-interface LeaderboardEntry {
-  id: string
-  username: string
-  xp: number
-  current_streak: number
-  created_at: string
+interface CommunityStats {
+  totalLearningDays: number
+  totalActivities: number
+  totalAdventuresAchieved: number
+  activeLearnersThisWeek: number
 }
 
-type TimeFilter = 'all' | 'week' | 'month'
+interface RecentMilestone {
+  id: string
+  type: 'mastery' | 'rhythm' | 'adventure'
+  message: string
+  timestamp: string
+}
 
-export default function LeaderboardPage() {
-  const { theme, themeId } = useTheme()
-  const [entries, setEntries] = useState<LeaderboardEntry[]>([])
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
-  const [currentUserRank, setCurrentUserRank] = useState<number | null>(null)
-  const [timeFilter, setTimeFilter] = useState<TimeFilter>('all')
+interface AnonymousCelebration {
+  id: string
+  message: string
+  icon: string
+}
+
+export default function CommunityPage() {
+  const { theme } = useTheme()
+  const [stats, setStats] = useState<CommunityStats>({
+    totalLearningDays: 0,
+    totalActivities: 0,
+    totalAdventuresAchieved: 0,
+    activeLearnersThisWeek: 0,
+  })
+  const [recentMilestones, setRecentMilestones] = useState<RecentMilestone[]>([])
   const [loading, setLoading] = useState(true)
-  const [totalStudents, setTotalStudents] = useState(0)
+
+  // Anonymous celebrations that rotate
+  const celebrations: AnonymousCelebration[] = [
+    { id: '1', message: 'Někdo právě dosáhl úrovně "Věřím si" v matematice!', icon: '🌟' },
+    { id: '2', message: 'Rodina splnila své dobrodružství - společný výlet!', icon: '🎉' },
+    { id: '3', message: 'Pět studentů se učilo každý den tento týden!', icon: '📚' },
+    { id: '4', message: 'Někdo dokončil svůj první CERMAT test!', icon: '🏆' },
+    { id: '5', message: 'Komunita má dnes přes 100 dokončených aktivit!', icon: '✨' },
+  ]
+
+  const [currentCelebration, setCurrentCelebration] = useState(0)
 
   useEffect(() => {
-    loadLeaderboard()
-  }, [timeFilter])
+    loadCommunityData()
 
-  async function loadLeaderboard() {
+    // Rotate celebrations
+    const interval = setInterval(() => {
+      setCurrentCelebration((prev) => (prev + 1) % celebrations.length)
+    }, 5000)
+
+    return () => clearInterval(interval)
+  }, [])
+
+  async function loadCommunityData() {
     setLoading(true)
     const supabase = createClient()
 
-    // Get current user
-    const { data: { user } } = await supabase.auth.getUser()
-    if (user) {
-      setCurrentUserId(user.id)
-    }
+    // Get total learning days (last 30 days)
+    const thirtyDaysAgo = new Date()
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
 
-    // For weekly/monthly, we need to calculate XP earned in that period
-    // For now, we'll use total XP but with filtering by activity date
-    if (timeFilter === 'all') {
-      // All-time leaderboard - simple query
-      const { data: students, count } = await supabase
-        .from('profiles')
-        .select('id, username, xp, current_streak, created_at', { count: 'exact' })
-        .eq('role', 'student')
-        .order('xp', { ascending: false })
+    const { count: learningDaysCount } = await supabase
+      .from('learning_days')
+      .select('*', { count: 'exact', head: true })
+      .gte('learning_date', thirtyDaysAgo.toISOString().split('T')[0])
 
-      if (students) {
-        setEntries(students)
-        setTotalStudents(count || students.length)
+    // Get total approved activities (last 30 days)
+    const { count: activitiesCount } = await supabase
+      .from('completed_activities')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'approved')
+      .gte('reviewed_at', thirtyDaysAgo.toISOString())
 
-        // Find current user rank
-        if (user) {
-          const rank = students.findIndex(s => s.id === user.id)
-          setCurrentUserRank(rank >= 0 ? rank + 1 : null)
-        }
-      }
-    } else {
-      // Weekly/Monthly - calculate XP from completed activities
-      const now = new Date()
-      let startDate: Date
+    // Get achieved adventures
+    const { count: adventuresCount } = await supabase
+      .from('family_adventures')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'achieved')
 
-      if (timeFilter === 'week') {
-        startDate = new Date(now)
-        startDate.setDate(now.getDate() - 7)
-      } else {
-        startDate = new Date(now)
-        startDate.setMonth(now.getMonth() - 1)
-      }
+    // Get active learners this week
+    const weekAgo = new Date()
+    weekAgo.setDate(weekAgo.getDate() - 7)
 
-      // Get XP earned in the period from completed_activities
-      const { data: activityXp } = await supabase
-        .from('completed_activities')
-        .select('user_id, xp_earned')
-        .eq('status', 'approved')
-        .gte('reviewed_at', startDate.toISOString())
+    const { data: weeklyLearners } = await supabase
+      .from('learning_days')
+      .select('user_id')
+      .gte('learning_date', weekAgo.toISOString().split('T')[0])
 
-      // Get all students
-      const { data: students, count } = await supabase
-        .from('profiles')
-        .select('id, username, xp, current_streak, created_at', { count: 'exact' })
-        .eq('role', 'student')
+    const uniqueLearners = new Set(weeklyLearners?.map(l => l.user_id) || [])
 
-      if (students && activityXp) {
-        // Calculate XP per user for the period
-        const xpByUser: Record<string, number> = {}
-        activityXp.forEach(a => {
-          xpByUser[a.user_id] = (xpByUser[a.user_id] || 0) + (a.xp_earned || 0)
+    setStats({
+      totalLearningDays: learningDaysCount || 0,
+      totalActivities: activitiesCount || 0,
+      totalAdventuresAchieved: adventuresCount || 0,
+      activeLearnersThisWeek: uniqueLearners.size,
+    })
+
+    // Generate recent milestones (anonymized)
+    const milestones: RecentMilestone[] = []
+
+    // Check for recent mastery level ups
+    const { data: recentMastery } = await supabase
+      .from('skill_progress')
+      .select('mastery_level, last_activity_at')
+      .in('mastery_level', ['confident', 'teaching'])
+      .gte('last_activity_at', thirtyDaysAgo.toISOString())
+      .order('last_activity_at', { ascending: false })
+      .limit(3)
+
+    recentMastery?.forEach((m, i) => {
+      milestones.push({
+        id: `mastery-${i}`,
+        type: 'mastery',
+        message: m.mastery_level === 'teaching'
+          ? 'Někdo dosáhl úrovně "Můžu učit"!'
+          : 'Někdo se posunul na "Věřím si"!',
+        timestamp: m.last_activity_at || new Date().toISOString(),
+      })
+    })
+
+    // Check for recent rhythm milestones
+    const { data: rhythmMilestones } = await supabase
+      .from('profiles')
+      .select('learning_rhythm_milestone')
+      .not('learning_rhythm_milestone', 'is', null)
+      .limit(5)
+
+    rhythmMilestones?.forEach((r, i) => {
+      if (r.learning_rhythm_milestone) {
+        milestones.push({
+          id: `rhythm-${i}`,
+          type: 'rhythm',
+          message: r.learning_rhythm_milestone === 'learning_is_life'
+            ? 'Někdo má učení jako součást života!'
+            : r.learning_rhythm_milestone === 'regular_student'
+              ? 'Někdo se stal pravidelným studentem!'
+              : 'Někdo našel svůj rytmus učení!',
+          timestamp: new Date().toISOString(),
         })
-
-        // Create entries with period XP
-        const entriesWithPeriodXp = students.map(s => ({
-          ...s,
-          xp: xpByUser[s.id] || 0
-        }))
-
-        // Sort by period XP
-        entriesWithPeriodXp.sort((a, b) => b.xp - a.xp)
-
-        setEntries(entriesWithPeriodXp)
-        setTotalStudents(count || students.length)
-
-        // Find current user rank
-        if (user) {
-          const rank = entriesWithPeriodXp.findIndex(s => s.id === user.id)
-          setCurrentUserRank(rank >= 0 ? rank + 1 : null)
-        }
       }
-    }
+    })
+
+    // Check for recent adventure achievements
+    const { data: recentAdventures } = await supabase
+      .from('family_adventures')
+      .select('name, achieved_at')
+      .eq('status', 'achieved')
+      .order('achieved_at', { ascending: false })
+      .limit(3)
+
+    recentAdventures?.forEach((a, i) => {
+      milestones.push({
+        id: `adventure-${i}`,
+        type: 'adventure',
+        message: `Rodina dosáhla cíle: "${a.name}"!`,
+        timestamp: a.achieved_at || new Date().toISOString(),
+      })
+    })
+
+    // Sort by timestamp and take top 5
+    milestones.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+    setRecentMilestones(milestones.slice(0, 5))
 
     setLoading(false)
   }
 
-  function getRankIcon(rank: number) {
-    switch (rank) {
-      case 1:
-        return <Crown className="w-6 h-6 text-yellow-400" />
-      case 2:
-        return <Medal className="w-6 h-6 text-gray-300" />
-      case 3:
-        return <Medal className="w-6 h-6 text-amber-600" />
-      default:
-        return <span className="w-6 h-6 flex items-center justify-center font-bold text-lg">{rank}</span>
+  const getMilestoneIcon = (type: RecentMilestone['type']) => {
+    switch (type) {
+      case 'mastery':
+        return <Star className="w-5 h-5" />
+      case 'rhythm':
+        return <Calendar className="w-5 h-5" />
+      case 'adventure':
+        return <Compass className="w-5 h-5" />
     }
   }
 
-  function getRankStyle(rank: number) {
-    switch (rank) {
-      case 1:
-        return 'bg-gradient-to-r from-yellow-500/20 to-yellow-600/10 border-yellow-500/50'
-      case 2:
-        return 'bg-gradient-to-r from-gray-400/20 to-gray-500/10 border-gray-400/50'
-      case 3:
-        return 'bg-gradient-to-r from-amber-600/20 to-amber-700/10 border-amber-600/50'
-      default:
-        return 'border-transparent'
+  const getMilestoneColor = (type: RecentMilestone['type']) => {
+    switch (type) {
+      case 'mastery':
+        return theme.colors.accent
+      case 'rhythm':
+        return theme.colors.primary
+      case 'adventure':
+        return theme.colors.xp
     }
   }
-
-  // Find the next person above current user
-  const currentUserEntry = entries.find(e => e.id === currentUserId)
-  const nextAbove = currentUserRank && currentUserRank > 1 ? entries[currentUserRank - 2] : null
-  const xpToNextRank = nextAbove && currentUserEntry ? nextAbove.xp - currentUserEntry.xp + 1 : null
-
-  // Get streak leader
-  const streakLeader = [...entries].sort((a, b) => b.current_streak - a.current_streak)[0]
 
   if (loading) {
     return (
@@ -171,262 +217,161 @@ export default function LeaderboardPage() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto">
+    <div className="max-w-2xl mx-auto p-4">
       <h1 className="text-3xl font-bold mb-2" style={{ color: theme.colors.text }}>
-        <Trophy className="inline-block w-8 h-8 mr-2 mb-1" style={{ color: theme.colors.accent }} />
-        Žebříček
+        <Users className="inline-block w-8 h-8 mr-2 mb-1" style={{ color: theme.colors.primary }} />
+        Naše komunita
       </h1>
       <p className="mb-6" style={{ color: theme.colors.textMuted }}>
-        Podívej se, jak jsi na tom oproti ostatním!
+        Společně rosteme, společně se učíme
       </p>
 
-      {/* Time Filter */}
-      <div className="flex gap-2 mb-6">
-        {[
-          { id: 'all', label: 'Celkově' },
-          { id: 'week', label: 'Tento týden' },
-          { id: 'month', label: 'Tento měsíc' },
-        ].map((filter) => (
-          <button
-            key={filter.id}
-            onClick={() => setTimeFilter(filter.id as TimeFilter)}
-            className={`px-4 py-2 rounded-lg font-medium transition-all ${
-              timeFilter === filter.id
-                ? 'text-white'
-                : ''
-            }`}
-            style={{
-              backgroundColor: timeFilter === filter.id ? theme.colors.primary : theme.colors.backgroundLight,
-              color: timeFilter === filter.id ? '#fff' : theme.colors.textMuted,
-            }}
+      {/* Rotating Celebration Banner */}
+      <div
+        className="rounded-xl p-4 mb-6 overflow-hidden"
+        style={{ backgroundColor: `${theme.colors.accent}20` }}
+      >
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={currentCelebration}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.3 }}
+            className="flex items-center gap-3"
           >
-            {filter.label}
-          </button>
-        ))}
+            <span className="text-3xl">{celebrations[currentCelebration].icon}</span>
+            <p className="font-medium" style={{ color: theme.colors.text }}>
+              {celebrations[currentCelebration].message}
+            </p>
+          </motion.div>
+        </AnimatePresence>
       </div>
 
-      {/* Current User Position Card */}
-      {currentUserRank && currentUserEntry && (
-        <div
-          className="border-2 rounded-xl p-4 mb-6"
-          style={{ backgroundColor: theme.colors.card, borderColor: theme.colors.primary }}
+      {/* Community Stats Grid */}
+      <div className="grid grid-cols-2 gap-4 mb-6">
+        <motion.div
+          className="rounded-xl p-4 text-center"
+          style={{ backgroundColor: theme.colors.card }}
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.1 }}
         >
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm" style={{ color: theme.colors.textMuted }}>Tvoje pozice</p>
-              <p className="text-3xl font-bold" style={{ color: theme.colors.primary }}>
-                #{currentUserRank}
-                <span className="text-lg ml-2" style={{ color: theme.colors.textMuted }}>
-                  z {totalStudents}
-                </span>
-              </p>
-            </div>
-            <div className="text-right">
-              <p className="text-sm" style={{ color: theme.colors.textMuted }}>
-                {timeFilter === 'all' ? 'Celkem XP' : timeFilter === 'week' ? 'XP tento týden' : 'XP tento měsíc'}
-              </p>
-              <p className="text-2xl font-bold" style={{ color: theme.colors.xp }}>
-                {currentUserEntry.xp} XP
-              </p>
-            </div>
-          </div>
+          <BookOpen className="w-8 h-8 mx-auto mb-2" style={{ color: theme.colors.primary }} />
+          <p className="text-3xl font-bold" style={{ color: theme.colors.primary }}>
+            {stats.totalActivities}
+          </p>
+          <p className="text-sm" style={{ color: theme.colors.textMuted }}>
+            aktivit tento měsíc
+          </p>
+        </motion.div>
 
-          {/* XP to next rank */}
-          {xpToNextRank && xpToNextRank > 0 && nextAbove && (
-            <div
-              className="mt-4 p-3 rounded-lg flex items-center gap-2"
-              style={{ backgroundColor: theme.colors.backgroundLight }}
-            >
-              <ChevronUp className="w-5 h-5" style={{ color: theme.colors.accent }} />
-              <span style={{ color: theme.colors.text }}>
-                Ještě <strong style={{ color: theme.colors.xp }}>{xpToNextRank} XP</strong> a předběhneš{' '}
-                <strong>{nextAbove.username}</strong>!
-              </span>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Streak Leader */}
-      {streakLeader && streakLeader.current_streak > 0 && (
-        <div
-          className="border rounded-xl p-4 mb-6 flex items-center justify-between"
-          style={{ backgroundColor: theme.colors.card, borderColor: theme.colors.backgroundLight }}
+        <motion.div
+          className="rounded-xl p-4 text-center"
+          style={{ backgroundColor: theme.colors.card }}
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.2 }}
         >
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full flex items-center justify-center bg-orange-500/20">
-              <Flame className="w-6 h-6 text-orange-500" />
-            </div>
-            <div>
-              <p className="text-sm" style={{ color: theme.colors.textMuted }}>Streak leader</p>
-              <p className="font-bold" style={{ color: theme.colors.text }}>{streakLeader.username}</p>
-            </div>
-          </div>
-          <div className="text-right">
-            <p className="text-2xl font-bold text-orange-500">{streakLeader.current_streak}</p>
-            <p className="text-xs" style={{ color: theme.colors.textMuted }}>dní v řadě</p>
-          </div>
-        </div>
-      )}
+          <Calendar className="w-8 h-8 mx-auto mb-2" style={{ color: theme.colors.accent }} />
+          <p className="text-3xl font-bold" style={{ color: theme.colors.accent }}>
+            {stats.totalLearningDays}
+          </p>
+          <p className="text-sm" style={{ color: theme.colors.textMuted }}>
+            dnů učení
+          </p>
+        </motion.div>
 
-      {/* Top 3 Podium */}
-      {entries.length >= 3 && (
-        <div className="flex justify-center items-end gap-2 mb-8">
-          {/* 2nd place */}
-          <div className="text-center">
-            <div
-              className="w-20 h-20 rounded-xl flex items-center justify-center text-3xl mx-auto mb-2 border-2 border-gray-400"
-              style={{ backgroundColor: theme.colors.backgroundLight }}
-            >
-              {getLevelFromXpWithTheme(entries[1].xp, themeId).icon}
-            </div>
-            <div className="bg-gray-400/20 rounded-t-lg pt-2 pb-1 px-3">
-              <Medal className="w-6 h-6 text-gray-300 mx-auto" />
-            </div>
-            <div
-              className="rounded-b-lg p-2"
-              style={{ backgroundColor: theme.colors.backgroundLight }}
-            >
-              <p className="font-bold text-sm truncate max-w-20" style={{ color: theme.colors.text }}>
-                {entries[1].username}
-              </p>
-              <p className="text-xs" style={{ color: theme.colors.xp }}>{entries[1].xp} XP</p>
-            </div>
-          </div>
+        <motion.div
+          className="rounded-xl p-4 text-center"
+          style={{ backgroundColor: theme.colors.card }}
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.3 }}
+        >
+          <Heart className="w-8 h-8 mx-auto mb-2" style={{ color: theme.colors.xp }} />
+          <p className="text-3xl font-bold" style={{ color: theme.colors.xp }}>
+            {stats.totalAdventuresAchieved}
+          </p>
+          <p className="text-sm" style={{ color: theme.colors.textMuted }}>
+            rodinných dobrodružství
+          </p>
+        </motion.div>
 
-          {/* 1st place */}
-          <div className="text-center -mt-4">
-            <div
-              className="w-24 h-24 rounded-xl flex items-center justify-center text-4xl mx-auto mb-2 border-2 border-yellow-400"
-              style={{ backgroundColor: theme.colors.backgroundLight }}
-            >
-              {getLevelFromXpWithTheme(entries[0].xp, themeId).icon}
-            </div>
-            <div className="bg-yellow-500/20 rounded-t-lg pt-2 pb-1 px-4">
-              <Crown className="w-8 h-8 text-yellow-400 mx-auto" />
-            </div>
-            <div
-              className="rounded-b-lg p-3"
-              style={{ backgroundColor: theme.colors.backgroundLight }}
-            >
-              <p className="font-bold truncate max-w-24" style={{ color: theme.colors.text }}>
-                {entries[0].username}
-              </p>
-              <p className="text-sm" style={{ color: theme.colors.xp }}>{entries[0].xp} XP</p>
-            </div>
-          </div>
+        <motion.div
+          className="rounded-xl p-4 text-center"
+          style={{ backgroundColor: theme.colors.card }}
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.4 }}
+        >
+          <TrendingUp className="w-8 h-8 mx-auto mb-2" style={{ color: theme.colors.currency }} />
+          <p className="text-3xl font-bold" style={{ color: theme.colors.currency }}>
+            {stats.activeLearnersThisWeek}
+          </p>
+          <p className="text-sm" style={{ color: theme.colors.textMuted }}>
+            aktivních tento týden
+          </p>
+        </motion.div>
+      </div>
 
-          {/* 3rd place */}
-          <div className="text-center">
-            <div
-              className="w-20 h-20 rounded-xl flex items-center justify-center text-3xl mx-auto mb-2 border-2 border-amber-600"
-              style={{ backgroundColor: theme.colors.backgroundLight }}
-            >
-              {getLevelFromXpWithTheme(entries[2].xp, themeId).icon}
-            </div>
-            <div className="bg-amber-600/20 rounded-t-lg pt-2 pb-1 px-3">
-              <Medal className="w-6 h-6 text-amber-600 mx-auto" />
-            </div>
-            <div
-              className="rounded-b-lg p-2"
-              style={{ backgroundColor: theme.colors.backgroundLight }}
-            >
-              <p className="font-bold text-sm truncate max-w-20" style={{ color: theme.colors.text }}>
-                {entries[2].username}
-              </p>
-              <p className="text-xs" style={{ color: theme.colors.xp }}>{entries[2].xp} XP</p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Full Leaderboard */}
+      {/* Recent Milestones */}
       <div
-        className="border rounded-xl overflow-hidden"
-        style={{ backgroundColor: theme.colors.card, borderColor: theme.colors.backgroundLight }}
+        className="rounded-xl p-4 mb-6"
+        style={{ backgroundColor: theme.colors.card }}
       >
-        <div className="p-4 border-b" style={{ borderColor: theme.colors.backgroundLight }}>
-          <h2 className="font-bold" style={{ color: theme.colors.text }}>
-            {timeFilter === 'all' ? 'Celkový žebříček' : timeFilter === 'week' ? 'Týdenní žebříček' : 'Měsíční žebříček'}
-          </h2>
-        </div>
+        <h2 className="text-lg font-bold mb-4 flex items-center gap-2" style={{ color: theme.colors.text }}>
+          <Sparkles className="w-5 h-5" style={{ color: theme.colors.accent }} />
+          Nedávné úspěchy komunity
+        </h2>
 
-        <div className="divide-y" style={{ borderColor: theme.colors.backgroundLight }}>
-          {entries.slice(0, 20).map((entry, index) => {
-            const rank = index + 1
-            const level = getLevelFromXpWithTheme(entry.xp, themeId)
-            const isCurrentUser = entry.id === currentUserId
-
-            return (
-              <div
-                key={entry.id}
-                className={`flex items-center gap-4 p-4 transition-colors ${getRankStyle(rank)} ${
-                  isCurrentUser ? 'ring-2 ring-inset' : ''
-                }`}
-                style={{
-                  backgroundColor: isCurrentUser ? `${theme.colors.primary}15` : undefined,
-                  borderColor: theme.colors.backgroundLight,
-                  ['--tw-ring-color' as string]: isCurrentUser ? theme.colors.primary : undefined,
-                }}
+        {recentMilestones.length === 0 ? (
+          <p className="text-center py-4" style={{ color: theme.colors.textMuted }}>
+            Buď první, kdo dosáhne milníku!
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {recentMilestones.map((milestone, index) => (
+              <motion.div
+                key={milestone.id}
+                className="flex items-center gap-3 p-3 rounded-lg"
+                style={{ backgroundColor: theme.colors.backgroundLight }}
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: index * 0.1 }}
               >
-                {/* Rank */}
-                <div className="w-8 flex justify-center" style={{ color: theme.colors.textMuted }}>
-                  {getRankIcon(rank)}
-                </div>
-
-                {/* Avatar */}
                 <div
-                  className="w-12 h-12 rounded-lg flex items-center justify-center text-xl"
-                  style={{ backgroundColor: `${level.color}20` }}
+                  className="w-10 h-10 rounded-lg flex items-center justify-center"
+                  style={{ backgroundColor: `${getMilestoneColor(milestone.type)}20`, color: getMilestoneColor(milestone.type) }}
                 >
-                  {level.icon}
+                  {getMilestoneIcon(milestone.type)}
                 </div>
+                <p className="flex-1" style={{ color: theme.colors.text }}>
+                  {milestone.message}
+                </p>
+              </motion.div>
+            ))}
+          </div>
+        )}
+      </div>
 
-                {/* Name & Level */}
-                <div className="flex-1 min-w-0">
-                  <p
-                    className={`font-bold truncate ${isCurrentUser ? 'underline' : ''}`}
-                    style={{ color: theme.colors.text }}
-                  >
-                    {entry.username}
-                    {isCurrentUser && <span className="ml-2 text-xs">(ty)</span>}
-                  </p>
-                  <p className="text-sm" style={{ color: level.color }}>
-                    Lv.{level.level} {level.name}
-                  </p>
-                </div>
-
-                {/* Streak */}
-                {entry.current_streak > 0 && (
-                  <div className="flex items-center gap-1 text-orange-500">
-                    <Flame className="w-4 h-4" />
-                    <span className="text-sm font-bold">{entry.current_streak}</span>
-                  </div>
-                )}
-
-                {/* XP */}
-                <div className="text-right">
-                  <p className="font-bold" style={{ color: theme.colors.xp }}>
-                    {entry.xp}
-                  </p>
-                  <p className="text-xs" style={{ color: theme.colors.textMuted }}>XP</p>
-                </div>
-              </div>
-            )
-          })}
+      {/* Encouragement */}
+      <div
+        className="rounded-xl p-6 text-center"
+        style={{ backgroundColor: `${theme.colors.primary}10` }}
+      >
+        <Trophy className="w-12 h-12 mx-auto mb-3" style={{ color: theme.colors.primary }} />
+        <h3 className="text-lg font-bold mb-2" style={{ color: theme.colors.text }}>
+          Každý krok se počítá
+        </h3>
+        <p style={{ color: theme.colors.textMuted }}>
+          V naší komunitě nejde o soutěžení. Jde o to, abychom se společně zlepšovali
+          a podporovali se na cestě k učení.
+        </p>
+        <div className="mt-4 flex items-center justify-center gap-2 text-sm" style={{ color: theme.colors.primary }}>
+          <MessageCircle className="w-4 h-4" />
+          <span>Tvoje snaha inspiruje ostatní</span>
         </div>
-
-        {entries.length === 0 && (
-          <div className="p-8 text-center" style={{ color: theme.colors.textMuted }}>
-            Žádní studenti k zobrazení
-          </div>
-        )}
-
-        {entries.length > 20 && (
-          <div className="p-4 text-center" style={{ color: theme.colors.textMuted }}>
-            Zobrazeno top 20 z {entries.length} studentů
-          </div>
-        )}
       </div>
     </div>
   )

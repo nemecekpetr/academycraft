@@ -79,7 +79,8 @@ export default function StreakCelebration({ isOpen, onClose, streakDays }: Strea
               className="text-3xl font-bold text-orange-400 mb-2"
               style={{ textShadow: '2px 2px 0 #000' }}
             >
-              {isMilestone ? '🔥 STREAK MILESTONE!' : '🔥 STREAK!'}
+              {/* Motivation 3.0: Celebrate consistency, not milestones for rewards */}
+              {isMilestone ? '🔥 Skvělá vytrvalost!' : '🔥 Učení pokračuje!'}
             </motion.h2>
 
             <motion.p
@@ -98,11 +99,10 @@ export default function StreakCelebration({ isOpen, onClose, streakDays }: Strea
               transition={{ delay: 0.4 }}
               className="text-[var(--foreground-muted)] mb-6"
             >
-              {streakDays >= 7 && streakDays % 7 === 0
-                ? '🎁 Máš nárok na Mystery Box!'
-                : streakDays === 6
-                ? 'Ještě 1 den do Mystery Boxu!'
-                : 'Pokračuj v dobré práci!'}
+              {/* Motivation 3.0: Focus on growth mindset, not rewards */}
+              {isMilestone
+                ? 'Tvoje vytrvalost se vyplácí! Mozek roste každým dnem.'
+                : 'Každý den učení tě posouvá dál!'}
             </motion.p>
 
             <motion.button

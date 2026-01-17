@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import { Check, X, Clock, User, Gift, Loader2 } from 'lucide-react'
 
 interface PendingPurchase {
@@ -25,94 +24,97 @@ export default function PurchasesPage() {
   const [pendingPurchases, setPendingPurchases] = useState<PendingPurchase[]>([])
   const [loading, setLoading] = useState(true)
   const [processingId, setProcessingId] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     loadPendingPurchases()
   }, [])
 
   async function loadPendingPurchases() {
-    const supabase = createClient()
+    try {
+      const response = await fetch('/api/admin/purchases')
+      const result = await response.json()
 
-    const { data, error } = await supabase
-      .from('purchases')
-      .select(`
-        id,
-        user_id,
-        item_id,
-        purchased_at,
-        user:profiles(username, email),
-        item:shop_items(name, icon, price, description)
-      `)
-      .eq('status', 'pending')
-      .order('purchased_at', { ascending: true })
+      if (!response.ok) {
+        setError(result.error || 'Failed to load purchases')
+        setLoading(false)
+        return
+      }
 
-    if (!error && data) {
-      setPendingPurchases(data as unknown as PendingPurchase[])
+      // Normalize join results
+      const normalizedData = result.data?.map((item: PendingPurchase) => ({
+        ...item,
+        user: Array.isArray(item.user) ? item.user[0] : item.user,
+        item: Array.isArray(item.item) ? item.item[0] : item.item,
+      })) || []
+
+      setPendingPurchases(normalizedData)
+    } catch (err) {
+      console.error('Error loading purchases:', err)
+      setError('Nepodařilo se načíst nákupy')
     }
-
     setLoading(false)
   }
 
-  async function fulfillPurchase(item: PendingPurchase) {
-    setProcessingId(item.id)
-    const supabase = createClient()
+  async function fulfillPurchase(purchase: PendingPurchase) {
+    setProcessingId(purchase.id)
+    setError(null)
 
-    const { error } = await supabase
-      .from('purchases')
-      .update({
-        status: 'fulfilled',
-        fulfilled_at: new Date().toISOString(),
+    try {
+      const response = await fetch('/api/admin/purchases', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          purchaseId: purchase.id,
+          action: 'fulfill',
+        }),
       })
-      .eq('id', item.id)
 
-    if (error) {
-      console.error('Error fulfilling purchase:', error)
-      setProcessingId(null)
-      return
+      const result = await response.json()
+
+      if (!response.ok) {
+        setError(result.error || 'Nepodařilo se potvrdit předání')
+        setProcessingId(null)
+        return
+      }
+
+      setPendingPurchases(prev => prev.filter(p => p.id !== purchase.id))
+    } catch (err) {
+      console.error('Error fulfilling purchase:', err)
+      setError('Nepodařilo se potvrdit předání')
     }
 
-    setPendingPurchases(prev => prev.filter(p => p.id !== item.id))
     setProcessingId(null)
   }
 
-  async function cancelPurchase(item: PendingPurchase) {
-    setProcessingId(item.id)
-    const supabase = createClient()
+  async function cancelPurchase(purchase: PendingPurchase) {
+    setProcessingId(purchase.id)
+    setError(null)
 
-    // Refund emeralds to user
-    if (item.item) {
-      const { data: userData } = await supabase
-        .from('profiles')
-        .select('emeralds')
-        .eq('id', item.user_id)
-        .single()
-
-      if (userData) {
-        await supabase
-          .from('profiles')
-          .update({
-            emeralds: (userData.emeralds || 0) + item.item.price,
-          })
-          .eq('id', item.user_id)
-      }
-    }
-
-    // Update purchase status
-    const { error } = await supabase
-      .from('purchases')
-      .update({
-        status: 'cancelled',
-        fulfilled_at: new Date().toISOString(),
+    try {
+      const response = await fetch('/api/admin/purchases', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          purchaseId: purchase.id,
+          action: 'cancel',
+        }),
       })
-      .eq('id', item.id)
 
-    if (error) {
-      console.error('Error cancelling purchase:', error)
-      setProcessingId(null)
-      return
+      const result = await response.json()
+
+      if (!response.ok) {
+        setError(result.error || 'Nepodařilo se zrušit nákup')
+        setProcessingId(null)
+        return
+      }
+
+      setPendingPurchases(prev => prev.filter(p => p.id !== purchase.id))
+    } catch (err) {
+      console.error('Error cancelling purchase:', err)
+      setError('Nepodařilo se zrušit nákup')
     }
 
-    setPendingPurchases(prev => prev.filter(p => p.id !== item.id))
     setProcessingId(null)
   }
 
@@ -133,6 +135,12 @@ export default function PurchasesPage() {
         </p>
       </div>
 
+      {error && (
+        <div className="mb-6 bg-red-500/20 border border-red-500 p-4 rounded-lg text-red-400">
+          {error}
+        </div>
+      )}
+
       {pendingPurchases.length === 0 ? (
         <div className="bg-[#0f0f1a] border border-[#2a2a4e] rounded-xl p-12 text-center">
           <Gift className="w-16 h-16 text-[var(--foreground-muted)] mx-auto mb-4" />
@@ -143,9 +151,9 @@ export default function PurchasesPage() {
         </div>
       ) : (
         <div className="space-y-4">
-          {pendingPurchases.map((item) => (
+          {pendingPurchases.map((purchase) => (
             <div
-              key={item.id}
+              key={purchase.id}
               className="bg-[#0f0f1a] border border-[#2a2a4e] rounded-xl p-6"
             >
               <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -156,8 +164,8 @@ export default function PurchasesPage() {
                       <User className="w-5 h-5 text-[var(--color-emerald)]" />
                     </div>
                     <div>
-                      <p className="font-bold text-white">{item.user?.username}</p>
-                      <p className="text-xs text-[var(--foreground-muted)]">{item.user?.email}</p>
+                      <p className="font-bold text-white">{purchase.user?.username}</p>
+                      <p className="text-xs text-[var(--foreground-muted)]">{purchase.user?.email}</p>
                     </div>
                   </div>
 
@@ -167,17 +175,17 @@ export default function PurchasesPage() {
                       <Gift className="w-6 h-6 text-[var(--color-rare)]" />
                     </div>
                     <div>
-                      <p className="font-bold text-white text-lg">{item.item?.name}</p>
-                      {item.item?.description && (
-                        <p className="text-sm text-[var(--foreground-muted)]">{item.item.description}</p>
+                      <p className="font-bold text-white text-lg">{purchase.item?.name}</p>
+                      {purchase.item?.description && (
+                        <p className="text-sm text-[var(--foreground-muted)]">{purchase.item.description}</p>
                       )}
                     </div>
                   </div>
 
                   <div className="mt-4 flex items-center gap-4 text-sm text-[var(--foreground-muted)]">
-                    <span>Zakoupeno: {new Date(item.purchased_at).toLocaleString('cs-CZ')}</span>
+                    <span>Zakoupeno: {new Date(purchase.purchased_at).toLocaleString('cs-CZ')}</span>
                     <span className="flex items-center gap-1">
-                      <span className="text-[var(--color-emerald)]">💎 {item.item?.price}</span>
+                      <span className="text-[var(--color-emerald)]">💎 {purchase.item?.price}</span>
                     </span>
                   </div>
                 </div>
@@ -185,12 +193,12 @@ export default function PurchasesPage() {
                 {/* Actions */}
                 <div className="flex gap-2">
                   <button
-                    onClick={() => cancelPurchase(item)}
-                    disabled={processingId === item.id}
+                    onClick={() => cancelPurchase(purchase)}
+                    disabled={processingId === purchase.id}
                     className="flex items-center gap-2 px-4 py-3 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition-colors disabled:opacity-50"
                     title="Zrušit a vrátit emeraldy"
                   >
-                    {processingId === item.id ? (
+                    {processingId === purchase.id ? (
                       <Loader2 className="w-5 h-5 animate-spin" />
                     ) : (
                       <X className="w-5 h-5" />
@@ -198,11 +206,11 @@ export default function PurchasesPage() {
                     Zrušit
                   </button>
                   <button
-                    onClick={() => fulfillPurchase(item)}
-                    disabled={processingId === item.id}
+                    onClick={() => fulfillPurchase(purchase)}
+                    disabled={processingId === purchase.id}
                     className="flex items-center gap-2 px-4 py-3 bg-[var(--color-emerald)]/20 text-[var(--color-emerald)] rounded-lg hover:bg-[var(--color-emerald)]/30 transition-colors disabled:opacity-50"
                   >
-                    {processingId === item.id ? (
+                    {processingId === purchase.id ? (
                       <Loader2 className="w-5 h-5 animate-spin" />
                     ) : (
                       <Check className="w-5 h-5" />

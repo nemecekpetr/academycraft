@@ -2,11 +2,12 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Shield, Lock, User, Loader2 } from 'lucide-react'
+import { createClient } from '@/lib/supabase/client'
+import { Shield, Lock, Mail, Loader2 } from 'lucide-react'
 
 export default function AdminLoginPage() {
   const router = useRouter()
-  const [username, setUsername] = useState('')
+  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -16,19 +17,48 @@ export default function AdminLoginPage() {
     setError('')
     setLoading(true)
 
-    // Hardcoded admin credentials
-    if (username === 'admin' && password === 'admin') {
-      // Set admin session in localStorage
-      localStorage.setItem('adminAuth', JSON.stringify({
-        authenticated: true,
-        timestamp: Date.now()
-      }))
-      router.push('/admin/dashboard')
-    } else {
+    const supabase = createClient()
+
+    const { data, error: authError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    })
+
+    if (authError) {
       setError('Nesprávné přihlašovací údaje')
+      setLoading(false)
+      return
     }
 
-    setLoading(false)
+    if (!data.user) {
+      setError('Přihlášení selhalo')
+      setLoading(false)
+      return
+    }
+
+    // Check if user has admin role
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', data.user.id)
+      .single()
+
+    if (profileError || !profile) {
+      setError('Nepodařilo se ověřit oprávnění')
+      await supabase.auth.signOut()
+      setLoading(false)
+      return
+    }
+
+    if (profile.role !== 'admin') {
+      setError('Nemáte oprávnění pro přístup do admin panelu')
+      await supabase.auth.signOut()
+      setLoading(false)
+      return
+    }
+
+    router.push('/admin/dashboard')
+    router.refresh()
   }
 
   return (
@@ -55,16 +85,16 @@ export default function AdminLoginPage() {
 
           <div>
             <label className="block mb-2 text-sm text-[var(--foreground-muted)]">
-              Uživatelské jméno
+              Email
             </label>
             <div className="relative">
-              <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--foreground-muted)]" />
+              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--foreground-muted)]" />
               <input
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 className="w-full bg-[#1a1a2e] border border-[#2a2a4e] rounded-lg pl-12 pr-4 py-3 text-white placeholder-[var(--foreground-muted)] focus:outline-none focus:border-[var(--color-legendary)]"
-                placeholder="admin"
+                placeholder="admin@example.com"
                 required
               />
             </div>
@@ -98,6 +128,13 @@ export default function AdminLoginPage() {
               'Přihlásit se'
             )}
           </button>
+
+          <a
+            href="/forgot-password"
+            className="block text-center text-sm text-[var(--foreground-muted)] hover:text-[var(--color-legendary)] transition-colors"
+          >
+            Zapomenuté heslo?
+          </a>
         </form>
       </div>
     </main>

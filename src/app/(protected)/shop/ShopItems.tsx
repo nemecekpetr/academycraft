@@ -21,6 +21,7 @@ import {
   Check,
   X,
   Lock,
+  Gem,
   type LucideProps,
 } from 'lucide-react'
 import type { ShopItem, Purchase } from '@/types/database'
@@ -207,7 +208,7 @@ export default function ShopItems({ items, pendingPurchases, userId, userEmerald
 
               {/* Price */}
               <div className="flex items-center justify-center gap-1">
-                <span className="text-sm">{theme.icons.currency}</span>
+                <Gem className="w-4 h-4" style={{ color: isLocked ? theme.colors.textMuted : (canAfford ? theme.colors.currency : '#ef4444') }} />
                 <span
                   className="font-bold text-sm"
                   style={{ color: isLocked ? theme.colors.textMuted : (canAfford ? theme.colors.currency : '#ef4444') }}
@@ -289,7 +290,7 @@ export default function ShopItems({ items, pendingPurchases, userId, userEmerald
                       </p>
                     )}
                     <div className="flex items-center justify-center gap-2 text-xl">
-                      <span className="text-2xl">{theme.icons.currency}</span>
+                      <Gem className="w-6 h-6" style={{ color: theme.colors.currency }} />
                       <span className="font-bold" style={{ color: theme.colors.currency }}>
                         {selectedItem.price}
                       </span>

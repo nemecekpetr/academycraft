@@ -1,13 +1,14 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
+import { createClient } from '@/lib/supabase/client'
 import {
   Shield,
   Users,
   Scroll,
-  ShoppingBag,
+  Compass,
   LayoutDashboard,
   LogOut,
   Settings,
@@ -25,36 +26,49 @@ export default function AdminLayout({
 }) {
   const router = useRouter()
   const pathname = usePathname()
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [loading, setLoading] = useState(true)
+  // Start as null to differentiate "not checked yet" from "checked and failed"
+  const [authState, setAuthState] = useState<'loading' | 'authenticated' | 'unauthenticated'>('loading')
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
-  useEffect(() => {
-    // Check if on login page
-    if (pathname === '/admin/login') {
-      setLoading(false)
+  const checkAdminAuth = useCallback(async () => {
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) {
+      setAuthState('unauthenticated')
+      router.push('/admin/login')
       return
     }
 
-    // Check admin auth
-    const authData = localStorage.getItem('adminAuth')
-    if (authData) {
-      const { authenticated, timestamp } = JSON.parse(authData)
-      // Session expires after 24 hours
-      if (authenticated && Date.now() - timestamp < 24 * 60 * 60 * 1000) {
-        setIsAuthenticated(true)
-      } else {
-        localStorage.removeItem('adminAuth')
-        router.push('/admin/login')
-      }
-    } else {
-      router.push('/admin/login')
-    }
-    setLoading(false)
-  }, [pathname, router])
+    // Check admin role
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single()
 
-  const handleLogout = () => {
-    localStorage.removeItem('adminAuth')
+    if (!profile || profile.role !== 'admin') {
+      setAuthState('unauthenticated')
+      router.push('/dashboard')
+      return
+    }
+
+    setAuthState('authenticated')
+  }, [router])
+
+  useEffect(() => {
+    // Skip auth check for login page
+    if (pathname === '/admin/login') {
+      setAuthState('authenticated') // Login page doesn't need auth check
+      return
+    }
+
+    checkAdminAuth()
+  }, [pathname, checkAdminAuth])
+
+  const handleLogout = async () => {
+    const supabase = createClient()
+    await supabase.auth.signOut()
     router.push('/admin/login')
   }
 
@@ -63,7 +77,9 @@ export default function AdminLayout({
     return <>{children}</>
   }
 
-  if (loading) {
+  // Loading state - show spinner, don't render children yet
+  // This prevents any side effects in children from running before auth check
+  if (authState === 'loading') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#1a1a2e]">
         <div className="animate-spin w-8 h-8 border-4 border-[var(--color-legendary)] border-t-transparent rounded-full" />
@@ -71,8 +87,17 @@ export default function AdminLayout({
     )
   }
 
-  if (!isAuthenticated) {
-    return null
+  // Unauthenticated - show redirecting message
+  // Middleware should handle redirect, but this is a fallback
+  if (authState === 'unauthenticated') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#1a1a2e]">
+        <div className="text-center">
+          <div className="animate-spin w-8 h-8 border-4 border-[var(--color-legendary)] border-t-transparent rounded-full mx-auto mb-4" />
+          <p className="text-[var(--foreground-muted)]">Přesměrování...</p>
+        </div>
+      </div>
+    )
   }
 
   const navItems = [
@@ -80,9 +105,9 @@ export default function AdminLayout({
     { href: '/admin/approvals', icon: ClipboardCheck, label: 'Schvalování' },
     { href: '/admin/purchases', icon: Gift, label: 'Nákupy' },
     { href: '/admin/users', icon: Users, label: 'Uživatelé' },
-    { href: '/admin/leaderboard', icon: Trophy, label: 'Žebříček' },
+    { href: '/admin/leaderboard', icon: Trophy, label: 'Přehled' },
     { href: '/admin/activities', icon: Scroll, label: 'Aktivity' },
-    { href: '/admin/shop', icon: ShoppingBag, label: 'Obchod' },
+    { href: '/admin/shop', icon: Compass, label: 'Dobrodružství' },
     { href: '/admin/settings', icon: Settings, label: 'Nastavení' },
   ]
 

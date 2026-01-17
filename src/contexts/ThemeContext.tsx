@@ -4,6 +4,8 @@ import { createContext, useContext, useState, useEffect, ReactNode } from 'react
 import { ThemeId, Theme, getTheme, THEMES, DEFAULT_THEME } from '@/lib/themes'
 import { createClient } from '@/lib/supabase/client'
 
+const THEME_STORAGE_KEY = 'academycraft-theme'
+
 interface ThemeContextType {
   theme: Theme
   themeId: ThemeId
@@ -14,15 +16,25 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined)
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [themeId, setThemeIdState] = useState<ThemeId>(DEFAULT_THEME)
+  // Initialize from localStorage (instant, no FOUC)
+  const [themeId, setThemeIdState] = useState<ThemeId>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(THEME_STORAGE_KEY)
+      if (saved && saved in THEMES) {
+        return saved as ThemeId
+      }
+    }
+    return DEFAULT_THEME
+  })
   const [isLoading, setIsLoading] = useState(true)
 
+  // Sync with Supabase on mount (secondary source)
   useEffect(() => {
-    loadThemeFromProfile()
+    syncThemeWithProfile()
   }, [])
 
+  // Apply theme CSS variables whenever themeId changes
   useEffect(() => {
-    // Apply theme CSS variables and styles
     const theme = getTheme(themeId)
     const root = document.documentElement
     const body = document.body
@@ -60,37 +72,54 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   }, [themeId])
 
-  async function loadThemeFromProfile() {
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+  async function syncThemeWithProfile() {
+    try {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
 
-    if (user) {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('theme')
-        .eq('id', user.id)
-        .single()
+      if (user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('theme')
+          .eq('id', user.id)
+          .single()
 
-      if (profile?.theme && profile.theme in THEMES) {
-        setThemeIdState(profile.theme as ThemeId)
+        if (profile?.theme && profile.theme in THEMES) {
+          const profileTheme = profile.theme as ThemeId
+          // Update state and localStorage if different
+          if (profileTheme !== themeId) {
+            setThemeIdState(profileTheme)
+            localStorage.setItem(THEME_STORAGE_KEY, profileTheme)
+          }
+        }
       }
+    } catch (error) {
+      console.error('Failed to sync theme with profile:', error)
     }
 
     setIsLoading(false)
   }
 
   async function setThemeId(id: ThemeId) {
+    // Update state immediately
     setThemeIdState(id)
 
-    // Save to database
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    // Save to localStorage (instant on next visit)
+    localStorage.setItem(THEME_STORAGE_KEY, id)
 
-    if (user) {
-      await supabase
-        .from('profiles')
-        .update({ theme: id })
-        .eq('id', user.id)
+    // Save to database (persistent across devices)
+    try {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+
+      if (user) {
+        await supabase
+          .from('profiles')
+          .update({ theme: id })
+          .eq('id', user.id)
+      }
+    } catch (error) {
+      console.error('Failed to save theme to profile:', error)
     }
   }
 

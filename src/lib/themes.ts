@@ -1,4 +1,7 @@
 // Theme system - visual styles for the app
+// Imports base levels from levels.ts and adds theme-specific names/icons
+
+import { LEVELS, Level } from './levels'
 
 export type ThemeId = 'minecraft' | 'unicorn' | 'kpop'
 
@@ -8,6 +11,13 @@ export interface ThemeLevel {
   minXp: number
   icon: string
   color: string
+}
+
+// Theme-specific level name overrides (icons and colors can also be overridden)
+interface ThemeLevelOverride {
+  name: string
+  icon?: string
+  color?: string
 }
 
 export interface ThemeIcons {
@@ -42,7 +52,22 @@ export interface Theme {
     text: string
     textMuted: string
   }
-  levels: ThemeLevel[]
+  // Level overrides - uses base LEVELS from levels.ts, allows name/icon/color overrides
+  levelOverrides: Record<number, ThemeLevelOverride>
+}
+
+// Helper to build theme levels from base LEVELS + theme overrides
+function buildThemeLevels(overrides: Record<number, ThemeLevelOverride>): ThemeLevel[] {
+  return LEVELS.map(baseLevel => {
+    const override = overrides[baseLevel.level]
+    return {
+      level: baseLevel.level,
+      minXp: baseLevel.minXp, // Always from base LEVELS
+      name: override?.name ?? baseLevel.name,
+      icon: override?.icon ?? baseLevel.icon,
+      color: override?.color ?? baseLevel.color,
+    }
+  })
 }
 
 export const THEMES: Record<ThemeId, Theme> = {
@@ -76,14 +101,8 @@ export const THEMES: Record<ThemeId, Theme> = {
       text: '#FFFFFF',
       textMuted: '#AAAAAA',
     },
-    levels: [
-      { level: 1, name: 'Nováček', minXp: 0, icon: '🌱', color: '#AAAAAA' },
-      { level: 2, name: 'Učedník', minXp: 100, icon: '📚', color: '#5D8C3E' },
-      { level: 3, name: 'Průzkumník', minXp: 300, icon: '🧭', color: '#4AEDD9' },
-      { level: 4, name: 'Válečník', minXp: 600, icon: '⚔️', color: '#FCEE4B' },
-      { level: 5, name: 'Mistr', minXp: 1000, icon: '👑', color: '#FF9500' },
-      { level: 6, name: 'Legenda', minXp: 2000, icon: '⭐', color: '#FF55FF' },
-    ],
+    // Minecraft uses default level names from levels.ts
+    levelOverrides: {},
   },
   unicorn: {
     id: 'unicorn',
@@ -115,14 +134,15 @@ export const THEMES: Record<ThemeId, Theme> = {
       text: '#1F0A1C',
       textMuted: '#6B3A60',
     },
-    levels: [
-      { level: 1, name: 'Hvězdička', minXp: 0, icon: '✨', color: '#FFB6C1' },
-      { level: 2, name: 'Víla', minXp: 100, icon: '🧚', color: '#DDA0DD' },
-      { level: 3, name: 'Princezna', minXp: 300, icon: '👸', color: '#FF69B4' },
-      { level: 4, name: 'Kouzelnice', minXp: 600, icon: '🔮', color: '#BA55D3' },
-      { level: 5, name: 'Královna', minXp: 1000, icon: '👑', color: '#FFD700' },
-      { level: 6, name: 'Bohyně', minXp: 2000, icon: '🦄', color: '#FF1493' },
-    ],
+    // Unicorn theme level overrides
+    levelOverrides: {
+      1: { name: 'Hvězdička', icon: '✨', color: '#FFB6C1' },
+      2: { name: 'Víla', icon: '🧚', color: '#DDA0DD' },
+      3: { name: 'Princezna', icon: '👸', color: '#FF69B4' },
+      4: { name: 'Kouzelnice', icon: '🔮', color: '#BA55D3' },
+      5: { name: 'Královna', icon: '👑', color: '#FFD700' },
+      6: { name: 'Bohyně', icon: '🦄', color: '#FF1493' },
+    },
   },
   kpop: {
     id: 'kpop',
@@ -154,16 +174,20 @@ export const THEMES: Record<ThemeId, Theme> = {
       text: '#FFFFFF',
       textMuted: '#A0A0B0',
     },
-    levels: [
-      { level: 1, name: 'Trainee', minXp: 0, icon: '🎵', color: '#94A3B8' },
-      { level: 2, name: 'Rookie', minXp: 100, icon: '🎤', color: '#60A5FA' },
-      { level: 3, name: 'Idol', minXp: 300, icon: '💫', color: '#FF4D8D' },
-      { level: 4, name: 'Star', minXp: 600, icon: '⭐', color: '#FBBF24' },
-      { level: 5, name: 'Superstar', minXp: 1000, icon: '🌟', color: '#F472B6' },
-      { level: 6, name: 'Legend', minXp: 2000, icon: '👑', color: '#FFD700' },
-    ],
+    // K-pop theme level overrides
+    levelOverrides: {
+      1: { name: 'Trainee', icon: '🎵', color: '#94A3B8' },
+      2: { name: 'Rookie', icon: '🎤', color: '#60A5FA' },
+      3: { name: 'Idol', icon: '💫', color: '#FF4D8D' },
+      4: { name: 'Star', icon: '⭐', color: '#FBBF24' },
+      5: { name: 'Superstar', icon: '🌟', color: '#F472B6' },
+      6: { name: 'Legend', icon: '👑', color: '#FFD700' },
+    },
   },
 }
+
+// Cache for built theme levels to avoid rebuilding on every call
+const themeLevelsCache = new Map<ThemeId, ThemeLevel[]>()
 
 export const DEFAULT_THEME: ThemeId = 'minecraft'
 
@@ -178,13 +202,28 @@ export function getTheme(themeId: ThemeId | string | null): Theme {
 }
 
 /**
+ * Get theme levels (built from base LEVELS + theme overrides)
+ * Results are cached for performance
+ */
+export function getThemeLevels(themeId: ThemeId | string | null): ThemeLevel[] {
+  const resolvedThemeId = (themeId && themeId in THEMES ? themeId : DEFAULT_THEME) as ThemeId
+
+  if (!themeLevelsCache.has(resolvedThemeId)) {
+    const theme = THEMES[resolvedThemeId]
+    themeLevelsCache.set(resolvedThemeId, buildThemeLevels(theme.levelOverrides))
+  }
+
+  return themeLevelsCache.get(resolvedThemeId)!
+}
+
+/**
  * Get level from XP for a specific theme
  */
 export function getLevelFromXpWithTheme(xp: number, themeId: ThemeId | string | null): ThemeLevel {
-  const theme = getTheme(themeId)
-  let currentLevel = theme.levels[0]
+  const levels = getThemeLevels(themeId)
+  let currentLevel = levels[0]
 
-  for (const level of theme.levels) {
+  for (const level of levels) {
     if (xp >= level.minXp) {
       currentLevel = level
     } else {
@@ -199,15 +238,15 @@ export function getLevelFromXpWithTheme(xp: number, themeId: ThemeId | string | 
  * Get next level for a specific theme
  */
 export function getNextLevelWithTheme(xp: number, themeId: ThemeId | string | null): ThemeLevel | null {
-  const theme = getTheme(themeId)
+  const levels = getThemeLevels(themeId)
   const currentLevel = getLevelFromXpWithTheme(xp, themeId)
-  const nextLevelIndex = theme.levels.findIndex(l => l.level === currentLevel.level) + 1
+  const nextLevelIndex = levels.findIndex(l => l.level === currentLevel.level) + 1
 
-  if (nextLevelIndex >= theme.levels.length) {
+  if (nextLevelIndex >= levels.length) {
     return null
   }
 
-  return theme.levels[nextLevelIndex]
+  return levels[nextLevelIndex]
 }
 
 /**

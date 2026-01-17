@@ -90,7 +90,7 @@ export default function LevelUpModal({ isOpen, onClose, newLevel }: LevelUpModal
                 transition={{ delay: 0.6 }}
                 className="text-[var(--foreground-muted)] mb-6"
               >
-                Gratulujeme! Dosáhl jsi nového levelu!
+                Tvoje snaha se vyplácí! Každým dnem se zlepšuješ.
               </motion.p>
 
               <motion.button
@@ -100,7 +100,7 @@ export default function LevelUpModal({ isOpen, onClose, newLevel }: LevelUpModal
                 onClick={onClose}
                 className="mc-button mc-button-primary px-8"
               >
-                Super!
+                Jdu dál!
               </motion.button>
             </motion.div>
           </motion.div>

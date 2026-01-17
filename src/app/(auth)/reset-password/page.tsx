@@ -1,18 +1,59 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { Lock, Loader2 } from 'lucide-react'
 
 export default function ResetPasswordPage() {
-  const router = useRouter()
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
+  const [validToken, setValidToken] = useState<boolean | null>(null)
+
+  // Track if token was validated by auth state change
+  const tokenValidatedRef = useRef(false)
+
+  useEffect(() => {
+    const supabase = createClient()
+
+    // Listen for auth state changes - Supabase will process the recovery token from URL
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        // Recovery token is valid, user can reset password
+        tokenValidatedRef.current = true
+        setValidToken(true)
+      } else if (event === 'SIGNED_IN' && session) {
+        // User already has a valid session (e.g., came back to page)
+        tokenValidatedRef.current = true
+        setValidToken(true)
+      }
+    })
+
+    // Also check for existing session after a delay (for URL hash processing)
+    async function checkExistingSession() {
+      // Give Supabase a moment to process URL hash token
+      await new Promise(resolve => setTimeout(resolve, 500))
+
+      const { data: { session: sessionAfterDelay } } = await supabase.auth.getSession()
+
+      if (sessionAfterDelay) {
+        tokenValidatedRef.current = true
+        setValidToken(true)
+      } else if (!tokenValidatedRef.current) {
+        // No session established after delay - invalid token
+        setValidToken(false)
+      }
+    }
+
+    checkExistingSession()
+
+    return () => {
+      subscription.unsubscribe()
+    }
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -37,13 +78,49 @@ export default function ResetPasswordPage() {
     })
 
     if (error) {
-      setError('Chyba při změně hesla. Zkus to znovu.')
+      console.error('Password reset error:', error)
+      if (error.message.includes('session')) {
+        setError('Odkaz pro obnovení hesla vypršel. Požádej o nový.')
+      } else {
+        setError('Chyba při změně hesla. Zkus to znovu.')
+      }
       setLoading(false)
       return
     }
 
     setSuccess(true)
     setLoading(false)
+  }
+
+  // Loading state while checking token
+  if (validToken === null) {
+    return (
+      <main className="min-h-screen flex items-center justify-center p-4">
+        <Loader2 className="w-8 h-8 animate-spin text-[var(--color-emerald)]" />
+      </main>
+    )
+  }
+
+  // Invalid or missing token
+  if (validToken === false) {
+    return (
+      <main className="min-h-screen flex flex-col items-center justify-center p-4">
+        <div className="mc-panel mc-panel-dark max-w-md w-full text-center">
+          <div className="text-6xl mb-4">⚠️</div>
+          <h1 className="text-2xl font-bold mb-4 text-red-400">
+            Neplatný odkaz
+          </h1>
+          <p className="text-[var(--foreground-muted)] mb-6">
+            Odkaz pro obnovení hesla je neplatný nebo vypršel. Požádej o nový odkaz.
+          </p>
+          <Link href="/forgot-password">
+            <button className="mc-button mc-button-primary">
+              Požádat o nový odkaz
+            </button>
+          </Link>
+        </div>
+      </main>
+    )
   }
 
   if (success) {

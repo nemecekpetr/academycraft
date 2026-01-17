@@ -1,7 +1,7 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { calculateXpProgress, calculateLevel, getLevelInfo } from '@/lib/constants'
+import { getLevelFromXp, getLevelProgress, getNextLevel } from '@/lib/levels'
 
 interface XpBarProps {
   xp: number
@@ -10,9 +10,13 @@ interface XpBarProps {
 }
 
 export default function XpBar({ xp, showLevel = true, size = 'md' }: XpBarProps) {
-  const progress = calculateXpProgress(xp)
-  const level = calculateLevel(xp)
-  const levelInfo = getLevelInfo(level)
+  const level = getLevelFromXp(xp)
+  const nextLevel = getNextLevel(xp)
+  const progress = getLevelProgress(xp)
+
+  // Calculate XP display values
+  const xpInLevel = xp - level.minXp
+  const xpNeeded = nextLevel ? nextLevel.minXp - level.minXp : 0
 
   const heights = {
     sm: 'h-4',
@@ -26,12 +30,12 @@ export default function XpBar({ xp, showLevel = true, size = 'md' }: XpBarProps)
         <div className="flex justify-between items-center mb-1">
           <span
             className="text-sm font-bold"
-            style={{ color: levelInfo.color, textShadow: `0 0 10px ${levelInfo.color}` }}
+            style={{ color: level.color, textShadow: `0 0 10px ${level.color}` }}
           >
-            Level {level}: {levelInfo.title}
+            Level {level.level}: {level.name}
           </span>
           <span className="text-xs text-[var(--foreground-muted)]">
-            {progress.current} / {progress.needed} XP
+            {nextLevel ? `${xpInLevel} / ${xpNeeded} XP` : 'MAX'}
           </span>
         </div>
       )}
@@ -40,12 +44,12 @@ export default function XpBar({ xp, showLevel = true, size = 'md' }: XpBarProps)
         <motion.div
           className="xp-bar-fill"
           initial={{ width: 0 }}
-          animate={{ width: `${progress.percentage}%` }}
+          animate={{ width: `${progress}%` }}
           transition={{ duration: 0.5, ease: 'easeOut' }}
         />
         {size !== 'sm' && (
           <span className="xp-bar-text">
-            {Math.round(progress.percentage)}%
+            {progress}%
           </span>
         )}
       </div>

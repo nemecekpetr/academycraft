@@ -1,8 +1,18 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Gift, Sparkles, Loader2 } from 'lucide-react'
+
+// Pre-generate particle positions to avoid Math.random() in render
+function generateParticlePositions(count: number) {
+  return Array.from({ length: count }, (_, i) => ({
+    id: i,
+    x: (Math.random() - 0.5) * 300,
+    y: (Math.random() - 0.5) * 300,
+    delay: Math.random() * 0.3,
+  }))
+}
 
 interface MysteryBoxProps {
   isOpen: boolean
@@ -16,10 +26,11 @@ const rarityColors = {
   legendary: 'from-purple-400 to-purple-600',
 }
 
+// Motivation 3.0: Changed from "odměna" (reward) to "překvapení" (surprise)
 const rarityNames = {
-  common: 'Běžná',
-  rare: 'Vzácná',
-  legendary: 'Legendární',
+  common: 'Malé',
+  rare: 'Speciální',
+  legendary: 'Úžasné',
 }
 
 const rarityGlow = {
@@ -31,6 +42,9 @@ const rarityGlow = {
 export default function MysteryBox({ isOpen, onClose, onOpen }: MysteryBoxProps) {
   const [phase, setPhase] = useState<'closed' | 'opening' | 'opened'>('closed')
   const [reward, setReward] = useState<{ type: 'common' | 'rare' | 'legendary'; description: string } | null>(null)
+
+  // Memoize particle positions to avoid regenerating on every render
+  const particles = useMemo(() => generateParticlePositions(20), [])
 
   const handleOpen = async () => {
     setPhase('opening')
@@ -89,10 +103,10 @@ export default function MysteryBox({ isOpen, onClose, onOpen }: MysteryBoxProps)
                 </motion.div>
 
                 <h2 className="text-2xl font-bold text-[var(--color-gold)] mb-2" style={{ textShadow: '2px 2px 0 #000' }}>
-                  Mystery Box!
+                  Překvapení! 🎁
                 </h2>
                 <p className="text-[var(--foreground-muted)] mb-6">
-                  7denní streak = tajemná odměna!
+                  Rodiče ti připravili něco speciálního!
                 </p>
 
                 <button onClick={handleOpen} className="mc-button mc-button-primary px-8">
@@ -116,18 +130,18 @@ export default function MysteryBox({ isOpen, onClose, onOpen }: MysteryBoxProps)
 
             {phase === 'opened' && reward && (
               <>
-                {/* Particles */}
-                {[...Array(20)].map((_, i) => (
+                {/* Particles - using memoized positions */}
+                {particles.map((particle) => (
                   <motion.div
-                    key={i}
+                    key={particle.id}
                     initial={{ opacity: 0, scale: 0, x: 0, y: 0 }}
                     animate={{
                       opacity: [0, 1, 0],
                       scale: [0.5, 1],
-                      x: (Math.random() - 0.5) * 300,
-                      y: (Math.random() - 0.5) * 300,
+                      x: particle.x,
+                      y: particle.y,
                     }}
-                    transition={{ duration: 1, delay: Math.random() * 0.3 }}
+                    transition={{ duration: 1, delay: particle.delay }}
                     className="absolute left-1/2 top-1/2"
                   >
                     <Sparkles className={`w-4 h-4 ${
@@ -156,7 +170,7 @@ export default function MysteryBox({ isOpen, onClose, onOpen }: MysteryBoxProps)
                     reward.type === 'legendary' ? 'text-purple-400' :
                     reward.type === 'rare' ? 'text-blue-400' : 'text-gray-400'
                   }`}>
-                    {rarityNames[reward.type]} odměna!
+                    {rarityNames[reward.type]} překvapení!
                   </p>
 
                   <h2 className="text-2xl font-bold text-white mb-6" style={{ textShadow: '2px 2px 0 #000' }}>

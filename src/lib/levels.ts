@@ -1,4 +1,5 @@
-// Level system configuration
+// Level system configuration - SINGLE SOURCE OF TRUTH
+// All level XP thresholds are defined here. Themes can override names/icons.
 
 export interface Level {
   level: number
@@ -9,6 +10,7 @@ export interface Level {
   color: string
 }
 
+// Base levels - XP thresholds are authoritative
 export const LEVELS: Level[] = [
   { level: 1, name: 'Nováček', nameEn: 'Novice', minXp: 0, icon: '🌱', color: '#AAAAAA' },
   { level: 2, name: 'Učedník', nameEn: 'Apprentice', minXp: 100, icon: '📚', color: '#5D8C3E' },
@@ -17,6 +19,9 @@ export const LEVELS: Level[] = [
   { level: 5, name: 'Mistr', nameEn: 'Master', minXp: 1000, icon: '👑', color: '#FF9500' },
   { level: 6, name: 'Legenda', nameEn: 'Legend', minXp: 2000, icon: '⭐', color: '#FF55FF' },
 ]
+
+// Maximum level
+export const MAX_LEVEL = LEVELS.length
 
 /**
  * Get level info based on XP amount

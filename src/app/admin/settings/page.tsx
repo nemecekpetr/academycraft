@@ -1,10 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { Settings, Database, Shield, Bell, Save, Loader2, RefreshCw } from 'lucide-react'
+import { Settings, Database, Shield, Bell, AlertTriangle, RefreshCw } from 'lucide-react'
 
 export default function AdminSettingsPage() {
-  const [saving, setSaving] = useState(false)
   const [settings, setSettings] = useState({
     xpPerLevel: 100,
     emeraldsPerActivity: 1,
@@ -14,20 +13,6 @@ export default function AdminSettingsPage() {
     maintenanceMode: false,
   })
 
-  async function saveSettings() {
-    setSaving(true)
-    // TODO: Implement actual settings save to database
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    setSaving(false)
-    alert('Nastavení uloženo!')
-  }
-
-  async function clearCache() {
-    if (!confirm('Opravdu chceš vymazat cache?')) return
-    // TODO: Implement cache clearing
-    alert('Cache vymazána!')
-  }
-
   return (
     <div>
       <div className="mb-8">
@@ -35,6 +20,20 @@ export default function AdminSettingsPage() {
         <p className="text-[var(--foreground-muted)]">
           Konfigurace systému AcademyCraft
         </p>
+      </div>
+
+      {/* Development Notice */}
+      <div className="mb-8 p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-xl">
+        <div className="flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 text-yellow-500 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm text-yellow-500 font-medium">Stránka ve vývoji</p>
+            <p className="text-sm text-[var(--foreground-muted)] mt-1">
+              Tato stránka zatím pouze zobrazuje nastavení. Změny se neukládají do databáze.
+              Pro změnu nastavení kontaktuj vývojáře nebo uprav přímo v Supabase.
+            </p>
+          </div>
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -57,6 +56,7 @@ export default function AdminSettingsPage() {
                 value={settings.xpPerLevel}
                 onChange={(e) => setSettings({ ...settings, xpPerLevel: parseInt(e.target.value) || 0 })}
                 className="w-full px-4 py-2 bg-[#1a1a2e] border border-[#2a2a4e] rounded-lg text-white focus:border-[var(--color-legendary)] focus:outline-none"
+                disabled
               />
               <p className="text-xs text-[var(--foreground-muted)] mt-1">
                 Kolik XP je potřeba pro postup na další level
@@ -72,6 +72,7 @@ export default function AdminSettingsPage() {
                 value={settings.emeraldsPerActivity}
                 onChange={(e) => setSettings({ ...settings, emeraldsPerActivity: parseInt(e.target.value) || 0 })}
                 className="w-full px-4 py-2 bg-[#1a1a2e] border border-[#2a2a4e] rounded-lg text-white focus:border-[var(--color-legendary)] focus:outline-none"
+                disabled
               />
             </div>
 
@@ -85,6 +86,7 @@ export default function AdminSettingsPage() {
                 value={settings.streakBonusMultiplier}
                 onChange={(e) => setSettings({ ...settings, streakBonusMultiplier: parseFloat(e.target.value) || 1 })}
                 className="w-full px-4 py-2 bg-[#1a1a2e] border border-[#2a2a4e] rounded-lg text-white focus:border-[var(--color-legendary)] focus:outline-none"
+                disabled
               />
               <p className="text-xs text-[var(--foreground-muted)] mt-1">
                 Násobitel XP bonusu za streak
@@ -100,6 +102,7 @@ export default function AdminSettingsPage() {
                 value={settings.maxDailyActivities}
                 onChange={(e) => setSettings({ ...settings, maxDailyActivities: parseInt(e.target.value) || 0 })}
                 className="w-full px-4 py-2 bg-[#1a1a2e] border border-[#2a2a4e] rounded-lg text-white focus:border-[var(--color-legendary)] focus:outline-none"
+                disabled
               />
             </div>
           </div>
@@ -115,7 +118,7 @@ export default function AdminSettingsPage() {
           </div>
 
           <div className="space-y-4">
-            <div className="flex items-center justify-between p-4 bg-[#1a1a2e] rounded-lg">
+            <div className="flex items-center justify-between p-4 bg-[#1a1a2e] rounded-lg opacity-60">
               <div className="flex items-center gap-3">
                 <Bell className="w-5 h-5 text-[var(--foreground-muted)]" />
                 <div>
@@ -125,9 +128,8 @@ export default function AdminSettingsPage() {
                   </div>
                 </div>
               </div>
-              <button
-                onClick={() => setSettings({ ...settings, enableNotifications: !settings.enableNotifications })}
-                className={`relative w-12 h-6 rounded-full transition-colors ${
+              <div
+                className={`relative w-12 h-6 rounded-full transition-colors cursor-not-allowed ${
                   settings.enableNotifications ? 'bg-[var(--color-emerald)]' : 'bg-[#2a2a4e]'
                 }`}
               >
@@ -136,10 +138,10 @@ export default function AdminSettingsPage() {
                     settings.enableNotifications ? 'translate-x-7' : 'translate-x-1'
                   }`}
                 />
-              </button>
+              </div>
             </div>
 
-            <div className="flex items-center justify-between p-4 bg-[#1a1a2e] rounded-lg">
+            <div className="flex items-center justify-between p-4 bg-[#1a1a2e] rounded-lg opacity-60">
               <div className="flex items-center gap-3">
                 <Database className="w-5 h-5 text-[var(--foreground-muted)]" />
                 <div>
@@ -149,9 +151,8 @@ export default function AdminSettingsPage() {
                   </div>
                 </div>
               </div>
-              <button
-                onClick={() => setSettings({ ...settings, maintenanceMode: !settings.maintenanceMode })}
-                className={`relative w-12 h-6 rounded-full transition-colors ${
+              <div
+                className={`relative w-12 h-6 rounded-full transition-colors cursor-not-allowed ${
                   settings.maintenanceMode ? 'bg-red-500' : 'bg-[#2a2a4e]'
                 }`}
               >
@@ -160,12 +161,12 @@ export default function AdminSettingsPage() {
                     settings.maintenanceMode ? 'translate-x-7' : 'translate-x-1'
                   }`}
                 />
-              </button>
+              </div>
             </div>
 
             <button
-              onClick={clearCache}
-              className="w-full flex items-center justify-center gap-2 p-4 bg-[#1a1a2e] hover:bg-[#2a2a4e] rounded-lg transition-colors"
+              disabled
+              className="w-full flex items-center justify-center gap-2 p-4 bg-[#1a1a2e] rounded-lg opacity-60 cursor-not-allowed"
             >
               <RefreshCw className="w-5 h-5" />
               Vymazat cache
@@ -201,18 +202,6 @@ export default function AdminSettingsPage() {
             </div>
           </div>
         </div>
-      </div>
-
-      {/* Save Button */}
-      <div className="mt-6 flex justify-end">
-        <button
-          onClick={saveSettings}
-          disabled={saving}
-          className="px-6 py-3 bg-[var(--color-emerald)] hover:bg-[var(--color-emerald)]/80 text-black font-bold rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
-        >
-          {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
-          Uložit nastavení
-        </button>
       </div>
     </div>
   )

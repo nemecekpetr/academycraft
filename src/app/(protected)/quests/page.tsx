@@ -13,12 +13,15 @@ export default async function QuestsPage() {
     redirect('/login')
   }
 
-  // Get all active activities
+  // Get all active activities with skill areas
   const { data: activities } = await supabase
     .from('activities')
-    .select('*')
+    .select(`
+      *,
+      skill_area:skill_areas(*)
+    `)
     .eq('is_active', true)
-    .order('xp_reward', { ascending: false })
+    .order('adventure_points', { ascending: false })
 
   // Get user's pending activities
   const { data: pendingActivities } = await supabase
@@ -33,7 +36,7 @@ export default async function QuestsPage() {
 
   return (
     <main className="p-4 max-w-lg mx-auto">
-      <h1 className="text-3xl font-bold mb-2 text-[var(--color-emerald)]" style={{ textShadow: '2px 2px 0 #000' }}>
+      <h1 className="text-3xl font-bold mb-2 text-[var(--theme-primary)]" style={{ textShadow: '2px 2px 0 #000' }}>
         Quest Board
       </h1>
       <p className="text-[var(--foreground-muted)] mb-6">

@@ -4,7 +4,8 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useTheme } from '@/contexts/ThemeContext'
-import { calculateStreakUpdate } from '@/lib/constants'
+import FamilyAdventure from '@/components/game/FamilyAdventure'
+import type { FamilyAdventure as FamilyAdventureType, AdventureTemplate } from '@/types/database'
 import {
   Users,
   Check,
@@ -13,10 +14,16 @@ import {
   Star,
   Gift,
   Loader2,
-  TrendingUp,
   UserPlus,
-  Link,
-  Copy
+  Compass,
+  Plus,
+  Heart,
+  MessageCircle,
+  Send,
+  Sparkles,
+  Calendar,
+  Target,
+  Minus
 } from 'lucide-react'
 
 interface Child {
@@ -25,7 +32,9 @@ interface Child {
   email: string
   xp: number
   emeralds: number
+  adventure_points: number
   current_streak: number
+  weekly_goal_days: number
 }
 
 interface PendingActivity {
@@ -40,8 +49,11 @@ interface PendingActivity {
     name: string
     xp_reward: number
     emerald_reward: number
+    adventure_points: number
     flawless_threshold: number | null
     max_score: number | null
+    purpose_message: string | null
+    skill_area: { name: string; color: string } | null
   } | null
 }
 
@@ -61,6 +73,8 @@ interface ParentDashboardProps {
   children: Child[]
   pendingActivities: PendingActivity[]
   pendingPurchases: PendingPurchase[]
+  familyAdventures: FamilyAdventureType[]
+  adventureTemplates: AdventureTemplate[]
 }
 
 export default function ParentDashboard({
@@ -68,17 +82,59 @@ export default function ParentDashboard({
   children,
   pendingActivities: initialActivities,
   pendingPurchases: initialPurchases,
+  familyAdventures: initialAdventures,
+  adventureTemplates,
 }: ParentDashboardProps) {
   const { theme } = useTheme()
   const router = useRouter()
   const [pendingActivities, setPendingActivities] = useState(initialActivities)
   const [pendingPurchases, setPendingPurchases] = useState(initialPurchases)
+  const [familyAdventures, setFamilyAdventures] = useState(initialAdventures)
   const [processingId, setProcessingId] = useState<string | null>(null)
   const [childEmail, setChildEmail] = useState('')
   const [addingChild, setAddingChild] = useState(false)
   const [addChildError, setAddChildError] = useState<string | null>(null)
   const [addChildSuccess, setAddChildSuccess] = useState<string | null>(null)
   const [showAddChild, setShowAddChild] = useState(false)
+
+  // Recognition state
+  const [showRecognition, setShowRecognition] = useState(false)
+  const [recognitionChild, setRecognitionChild] = useState<Child | null>(null)
+  const [recognitionMessage, setRecognitionMessage] = useState('')
+  const [recognitionType, setRecognitionType] = useState<'parent_note' | 'surprise_celebration'>('parent_note')
+  const [sendingRecognition, setSendingRecognition] = useState(false)
+
+  // Adventure state
+  const [showCreateAdventure, setShowCreateAdventure] = useState(false)
+  const [newAdventureName, setNewAdventureName] = useState('')
+  const [newAdventureDesc, setNewAdventureDesc] = useState('')
+  const [newAdventurePoints, setNewAdventurePoints] = useState(100)
+  const [creatingAdventure, setCreatingAdventure] = useState(false)
+
+  // Approval message state - per activity to avoid cross-contamination
+  const [approvalMessages, setApprovalMessages] = useState<Record<string, string>>({})
+
+  // Goal setting state (Motivation 3.0 - Autonomy: Set goals together)
+  const [editingGoalChildId, setEditingGoalChildId] = useState<string | null>(null)
+  const [childrenState, setChildrenState] = useState(children)
+
+  const activeAdventure = familyAdventures.find(a => a.status === 'active')
+
+  async function updateWeeklyGoal(childId: string, newGoal: number) {
+    const supabase = createClient()
+    const clampedGoal = Math.max(1, Math.min(7, newGoal))
+
+    const { error } = await supabase
+      .from('profiles')
+      .update({ weekly_goal_days: clampedGoal })
+      .eq('id', childId)
+
+    if (!error) {
+      setChildrenState(prev =>
+        prev.map(c => c.id === childId ? { ...c, weekly_goal_days: clampedGoal } : c)
+      )
+    }
+  }
 
   async function addChild() {
     if (!childEmail.trim()) return
@@ -89,7 +145,6 @@ export default function ParentDashboard({
 
     const supabase = createClient()
 
-    // Find the student by email
     const { data: student, error: findError } = await supabase
       .from('profiles')
       .select('id, username, role, parent_id')
@@ -114,7 +169,6 @@ export default function ParentDashboard({
       return
     }
 
-    // Assign child to parent
     const { error: updateError } = await supabase
       .from('profiles')
       .update({ parent_id: profile.id })
@@ -130,7 +184,6 @@ export default function ParentDashboard({
     setChildEmail('')
     setAddingChild(false)
 
-    // Refresh the page to show updated children list
     setTimeout(() => {
       router.refresh()
       setShowAddChild(false)
@@ -142,86 +195,69 @@ export default function ParentDashboard({
     if (!item.activity) return
 
     setProcessingId(item.id)
-    const supabase = createClient()
 
-    // Get child's current stats
-    const { data: childData } = await supabase
-      .from('profiles')
-      .select('xp, emeralds, current_streak, longest_streak, last_activity_date')
-      .eq('id', item.user_id)
-      .single()
+    try {
+      const message = approvalMessages[item.id]?.trim() || ''
 
-    if (!childData) {
-      setProcessingId(null)
-      return
-    }
+      const response = await fetch('/api/admin/approvals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          activityId: item.id,
+          action: 'approve',
+          recognitionMessage: message || undefined,
+        }),
+      })
 
-    // Calculate rewards
-    let xpEarned = item.activity.xp_reward
-    let emeraldsEarned = item.activity.emerald_reward
-    let isFlawless = false
-
-    if (item.activity.flawless_threshold && item.score !== null) {
-      if (item.score >= item.activity.flawless_threshold) {
-        isFlawless = true
-        xpEarned *= 2
-        emeraldsEarned *= 2
+      if (!response.ok) {
+        const data = await response.json()
+        console.error('Approval failed:', data.error)
+        // Could show error to user here
+        setProcessingId(null)
+        return
       }
+
+      // Clear message for this activity
+      setApprovalMessages(prev => {
+        const next = { ...prev }
+        delete next[item.id]
+        return next
+      })
+      setPendingActivities(prev => prev.filter(a => a.id !== item.id))
+      router.refresh()
+    } catch (error) {
+      console.error('Approval error:', error)
+    } finally {
+      setProcessingId(null)
     }
-
-    // Calculate streak update
-    const streakUpdate = calculateStreakUpdate(
-      childData.last_activity_date,
-      childData.current_streak || 0,
-      childData.longest_streak || 0
-    )
-
-    // Update activity
-    await supabase
-      .from('completed_activities')
-      .update({
-        status: 'approved',
-        reviewed_at: new Date().toISOString(),
-        xp_earned: xpEarned,
-        emeralds_earned: emeraldsEarned,
-        is_flawless: isFlawless,
-      })
-      .eq('id', item.id)
-
-    // Update child's XP, emeralds, and streak
-    await supabase
-      .from('profiles')
-      .update({
-        xp: (childData.xp || 0) + xpEarned,
-        emeralds: (childData.emeralds || 0) + emeraldsEarned,
-        last_activity_date: new Date().toISOString().split('T')[0],
-        current_streak: streakUpdate.newStreak,
-        longest_streak: streakUpdate.newLongestStreak,
-      })
-      .eq('id', item.user_id)
-
-    setPendingActivities(prev => prev.filter(a => a.id !== item.id))
-    setProcessingId(null)
-    router.refresh()
   }
 
   async function rejectActivity(item: PendingActivity) {
     setProcessingId(item.id)
-    const supabase = createClient()
 
-    await supabase
-      .from('completed_activities')
-      .update({
-        status: 'rejected',
-        reviewed_at: new Date().toISOString(),
-        xp_earned: 0,
-        emeralds_earned: 0,
-        is_flawless: false,
+    try {
+      const response = await fetch('/api/admin/approvals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          activityId: item.id,
+          action: 'reject',
+        }),
       })
-      .eq('id', item.id)
 
-    setPendingActivities(prev => prev.filter(a => a.id !== item.id))
-    setProcessingId(null)
+      if (!response.ok) {
+        const data = await response.json()
+        console.error('Rejection failed:', data.error)
+        setProcessingId(null)
+        return
+      }
+
+      setPendingActivities(prev => prev.filter(a => a.id !== item.id))
+    } catch (error) {
+      console.error('Rejection error:', error)
+    } finally {
+      setProcessingId(null)
+    }
   }
 
   async function fulfillPurchase(item: PendingPurchase) {
@@ -240,6 +276,61 @@ export default function ParentDashboard({
     setProcessingId(null)
   }
 
+  async function sendRecognition() {
+    if (!recognitionChild || !recognitionMessage.trim()) return
+
+    setSendingRecognition(true)
+    const supabase = createClient()
+
+    await supabase
+      .from('recognitions')
+      .insert({
+        user_id: recognitionChild.id,
+        recognition_type: recognitionType,
+        title: recognitionType === 'surprise_celebration' ? 'Překvapivá oslava!' : 'Zpráva od rodiče',
+        message: recognitionMessage,
+        created_by: profile.id,
+      })
+
+    setSendingRecognition(false)
+    setShowRecognition(false)
+    setRecognitionChild(null)
+    setRecognitionMessage('')
+  }
+
+  async function createAdventure() {
+    if (!newAdventureName.trim()) return
+
+    setCreatingAdventure(true)
+    const supabase = createClient()
+
+    const { data: newAdventure } = await supabase
+      .from('family_adventures')
+      .insert({
+        family_id: profile.id,
+        name: newAdventureName,
+        description: newAdventureDesc || null,
+        points_needed: newAdventurePoints,
+        points_current: 0,
+        icon: 'compass',
+        status: 'active',
+        created_by: profile.id,
+      })
+      .select()
+      .single()
+
+    if (newAdventure) {
+      setFamilyAdventures([newAdventure, ...familyAdventures])
+    }
+
+    setCreatingAdventure(false)
+    setShowCreateAdventure(false)
+    setNewAdventureName('')
+    setNewAdventureDesc('')
+    setNewAdventurePoints(100)
+    router.refresh()
+  }
+
   return (
     <main className="p-4 max-w-4xl mx-auto">
       {/* Header */}
@@ -248,11 +339,143 @@ export default function ParentDashboard({
           Ahoj, {profile.username}!
         </h1>
         <p style={{ color: theme.colors.textMuted }}>
-          Rodičovský přehled
+          Rodičovský přehled (Motivace 3.0)
         </p>
       </div>
 
-      {/* Children Overview */}
+      {/* Family Adventure Section */}
+      <div
+        className="rounded-xl p-4 mb-6 border-2"
+        style={{
+          backgroundColor: theme.colors.card,
+          borderColor: theme.colors.backgroundLight
+        }}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-bold flex items-center gap-2" style={{ color: theme.colors.text }}>
+            <Compass className="w-5 h-5" style={{ color: theme.colors.primary }} />
+            Rodinné dobrodružství
+          </h2>
+          {!activeAdventure && (
+            <button
+              onClick={() => setShowCreateAdventure(!showCreateAdventure)}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors"
+              style={{
+                backgroundColor: `${theme.colors.primary}20`,
+                color: theme.colors.primary
+              }}
+            >
+              <Plus className="w-4 h-4" />
+              Nové dobrodružství
+            </button>
+          )}
+        </div>
+
+        {/* Create Adventure Form */}
+        {showCreateAdventure && (
+          <div
+            className="p-4 rounded-lg mb-4"
+            style={{ backgroundColor: theme.colors.backgroundLight }}
+          >
+            <p className="text-sm mb-3" style={{ color: theme.colors.textMuted }}>
+              Vytvořte společný cíl pro rodinu
+            </p>
+
+            <div className="space-y-3">
+              <input
+                type="text"
+                value={newAdventureName}
+                onChange={(e) => setNewAdventureName(e.target.value)}
+                placeholder="Název dobrodružství (např. Filmový večer)"
+                className="w-full px-4 py-2 rounded-lg border-2 bg-transparent focus:outline-none"
+                style={{
+                  borderColor: theme.colors.backgroundLight,
+                  color: theme.colors.text
+                }}
+              />
+
+              <textarea
+                value={newAdventureDesc}
+                onChange={(e) => setNewAdventureDesc(e.target.value)}
+                placeholder="Popis (volitelné)"
+                rows={2}
+                className="w-full px-4 py-2 rounded-lg border-2 bg-transparent focus:outline-none resize-none"
+                style={{
+                  borderColor: theme.colors.backgroundLight,
+                  color: theme.colors.text
+                }}
+              />
+
+              <div>
+                <label className="text-sm block mb-1" style={{ color: theme.colors.textMuted }}>
+                  Potřebné body: {newAdventurePoints}
+                </label>
+                <input
+                  type="range"
+                  min={50}
+                  max={1000}
+                  step={50}
+                  value={newAdventurePoints}
+                  onChange={(e) => setNewAdventurePoints(parseInt(e.target.value))}
+                  className="w-full"
+                />
+              </div>
+
+              {/* Template suggestions */}
+              {adventureTemplates.length > 0 && (
+                <div>
+                  <p className="text-xs mb-2" style={{ color: theme.colors.textMuted }}>
+                    Inspirace:
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {adventureTemplates.slice(0, 4).map((template) => (
+                      <button
+                        key={template.id}
+                        onClick={() => {
+                          setNewAdventureName(template.name)
+                          setNewAdventureDesc(template.description || '')
+                          setNewAdventurePoints(template.suggested_points)
+                        }}
+                        className="text-xs px-2 py-1 rounded border"
+                        style={{
+                          borderColor: theme.colors.backgroundLight,
+                          color: theme.colors.textMuted
+                        }}
+                      >
+                        {template.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <button
+                onClick={createAdventure}
+                disabled={creatingAdventure || !newAdventureName.trim()}
+                className="w-full px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
+                style={{
+                  backgroundColor: theme.colors.primary,
+                  color: '#fff'
+                }}
+              >
+                {creatingAdventure ? (
+                  <Loader2 className="w-5 h-5 animate-spin mx-auto" />
+                ) : (
+                  'Vytvořit dobrodružství'
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Current Adventure */}
+        <FamilyAdventure
+          adventure={activeAdventure || null}
+          size="lg"
+        />
+      </div>
+
+      {/* Children Overview with Recognition */}
       <div
         className="rounded-xl p-4 mb-6 border-2"
         style={{
@@ -332,28 +555,187 @@ export default function ParentDashboard({
           </div>
         )}
 
-        {children.length === 0 ? (
+        {/* Recognition Form */}
+        {showRecognition && recognitionChild && (
+          <div
+            className="p-4 rounded-lg mb-4"
+            style={{ backgroundColor: theme.colors.backgroundLight }}
+          >
+            <p className="text-sm mb-3 font-bold" style={{ color: theme.colors.text }}>
+              Poslat uznání pro {recognitionChild.username}
+            </p>
+
+            <div className="flex gap-2 mb-3">
+              <button
+                onClick={() => setRecognitionType('parent_note')}
+                className={`flex-1 px-3 py-2 rounded-lg text-sm flex items-center justify-center gap-2 border-2`}
+                style={{
+                  borderColor: recognitionType === 'parent_note' ? theme.colors.primary : 'transparent',
+                  backgroundColor: recognitionType === 'parent_note' ? `${theme.colors.primary}20` : 'transparent',
+                  color: recognitionType === 'parent_note' ? theme.colors.primary : theme.colors.textMuted
+                }}
+              >
+                <Heart className="w-4 h-4" />
+                Zpráva
+              </button>
+              <button
+                onClick={() => setRecognitionType('surprise_celebration')}
+                className={`flex-1 px-3 py-2 rounded-lg text-sm flex items-center justify-center gap-2 border-2`}
+                style={{
+                  borderColor: recognitionType === 'surprise_celebration' ? theme.colors.accent : 'transparent',
+                  backgroundColor: recognitionType === 'surprise_celebration' ? `${theme.colors.accent}20` : 'transparent',
+                  color: recognitionType === 'surprise_celebration' ? theme.colors.accent : theme.colors.textMuted
+                }}
+              >
+                <Sparkles className="w-4 h-4" />
+                Oslava
+              </button>
+            </div>
+
+            <textarea
+              value={recognitionMessage}
+              onChange={(e) => setRecognitionMessage(e.target.value)}
+              placeholder={recognitionType === 'surprise_celebration'
+                ? 'Jsem na tebe pyšný/á za...'
+                : 'Tvoje snaha mě těší...'}
+              rows={3}
+              className="w-full px-4 py-2 rounded-lg border-2 bg-transparent focus:outline-none resize-none mb-3"
+              style={{
+                borderColor: theme.colors.backgroundLight,
+                color: theme.colors.text
+              }}
+            />
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  setShowRecognition(false)
+                  setRecognitionChild(null)
+                  setRecognitionMessage('')
+                }}
+                className="flex-1 px-4 py-2 rounded-lg"
+                style={{
+                  backgroundColor: theme.colors.backgroundLight,
+                  color: theme.colors.textMuted
+                }}
+              >
+                Zrušit
+              </button>
+              <button
+                onClick={sendRecognition}
+                disabled={sendingRecognition || !recognitionMessage.trim()}
+                className="flex-1 px-4 py-2 rounded-lg flex items-center justify-center gap-2 disabled:opacity-50"
+                style={{
+                  backgroundColor: theme.colors.primary,
+                  color: '#fff'
+                }}
+              >
+                {sendingRecognition ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <>
+                    <Send className="w-4 h-4" />
+                    Odeslat
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {childrenState.length === 0 ? (
           <p style={{ color: theme.colors.textMuted }}>
             Zatím nemáte přiřazené žádné děti. Klikněte na "Přidat dítě" pro přidání.
           </p>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {children.map((child) => (
+            {childrenState.map((child) => (
               <div
                 key={child.id}
                 className="p-4 rounded-lg"
                 style={{ backgroundColor: theme.colors.backgroundLight }}
               >
-                <p className="font-bold" style={{ color: theme.colors.text }}>{child.username}</p>
-                <div className="flex items-center gap-4 mt-2 text-sm">
-                  <span style={{ color: theme.colors.xp }}>
-                    {theme.icons.xp} {child.xp} XP
+                <div className="flex items-center justify-between mb-2">
+                  <p className="font-bold" style={{ color: theme.colors.text }}>{child.username}</p>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setEditingGoalChildId(
+                        editingGoalChildId === child.id ? null : child.id
+                      )}
+                      className="p-1.5 rounded-lg"
+                      style={{
+                        backgroundColor: editingGoalChildId === child.id
+                          ? `${theme.colors.primary}30`
+                          : `${theme.colors.primary}20`,
+                        color: theme.colors.primary
+                      }}
+                      title="Nastavit týdenní cíl"
+                    >
+                      <Target className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => {
+                        setRecognitionChild(child)
+                        setShowRecognition(true)
+                      }}
+                      className="p-1.5 rounded-lg"
+                      style={{
+                        backgroundColor: `${theme.colors.accent}20`,
+                        color: theme.colors.accent
+                      }}
+                      title="Poslat uznání"
+                    >
+                      <MessageCircle className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Weekly Goal Setting (Motivation 3.0 - Autonomy) */}
+                {editingGoalChildId === child.id && (
+                  <div
+                    className="mb-3 p-3 rounded-lg"
+                    style={{ backgroundColor: `${theme.colors.primary}10` }}
+                  >
+                    <p className="text-xs mb-2" style={{ color: theme.colors.primary }}>
+                      💡 Nastavte cíl společně s dítětem (Autonomie)
+                    </p>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm" style={{ color: theme.colors.text }}>
+                        Dnů učení týdně:
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => updateWeeklyGoal(child.id, (child.weekly_goal_days || 3) - 1)}
+                          disabled={(child.weekly_goal_days || 3) <= 1}
+                          className="p-1 rounded disabled:opacity-30"
+                          style={{ backgroundColor: theme.colors.backgroundLight }}
+                        >
+                          <Minus className="w-4 h-4" />
+                        </button>
+                        <span className="text-lg font-bold w-6 text-center" style={{ color: theme.colors.primary }}>
+                          {child.weekly_goal_days || 3}
+                        </span>
+                        <button
+                          onClick={() => updateWeeklyGoal(child.id, (child.weekly_goal_days || 3) + 1)}
+                          disabled={(child.weekly_goal_days || 3) >= 7}
+                          className="p-1 rounded disabled:opacity-30"
+                          style={{ backgroundColor: theme.colors.backgroundLight }}
+                        >
+                          <Plus className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center gap-3 text-sm">
+                  <span className="flex items-center gap-1" style={{ color: theme.colors.primary }}>
+                    <Heart className="w-3 h-3" />
+                    {child.adventure_points || 0}
                   </span>
-                  <span style={{ color: theme.colors.currency }}>
-                    {theme.icons.currency} {child.emeralds}
-                  </span>
-                  <span style={{ color: theme.colors.accent }}>
-                    🔥 {child.current_streak} dní
+                  <span style={{ color: theme.colors.textMuted }}>
+                    <Target className="w-3 h-3 inline mr-1" />
+                    {child.weekly_goal_days || 3} dní/týden
                   </span>
                 </div>
               </div>
@@ -380,11 +762,9 @@ export default function ParentDashboard({
             Žádné aktivity ke schválení
           </p>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-4">
             {pendingActivities.map((item) => {
-              const isFlawless = item.activity?.flawless_threshold &&
-                item.score !== null &&
-                item.score >= item.activity.flawless_threshold
+              const skillArea = item.activity?.skill_area
 
               return (
                 <div
@@ -392,7 +772,7 @@ export default function ParentDashboard({
                   className="p-4 rounded-lg"
                   style={{ backgroundColor: theme.colors.backgroundLight }}
                 >
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex flex-col gap-3">
                     <div>
                       <div className="flex items-center gap-2 mb-1">
                         <span className="font-bold" style={{ color: theme.colors.primary }}>
@@ -400,44 +780,52 @@ export default function ParentDashboard({
                         </span>
                         <span style={{ color: theme.colors.textMuted }}>•</span>
                         <span style={{ color: theme.colors.text }}>{item.activity?.name}</span>
+                        {skillArea && (
+                          <span
+                            className="text-xs px-2 py-0.5 rounded"
+                            style={{
+                              backgroundColor: `${skillArea.color}20`,
+                              color: skillArea.color
+                            }}
+                          >
+                            {skillArea.name}
+                          </span>
+                        )}
                       </div>
 
                       {item.score !== null && (
-                        <div className="flex items-center gap-2 text-sm">
-                          <span style={{ color: theme.colors.textMuted }}>Skóre:</span>
-                          <span className="font-bold" style={{ color: isFlawless ? theme.colors.accent : theme.colors.text }}>
-                            {item.score}/{item.activity?.max_score || 100}
-                          </span>
-                          {isFlawless && (
-                            <span
-                              className="flex items-center gap-1 text-xs px-2 py-0.5 rounded"
-                              style={{
-                                backgroundColor: `${theme.colors.accent}20`,
-                                color: theme.colors.accent
-                              }}
-                            >
-                              <Star className="w-3 h-3" />
-                              2x
-                            </span>
-                          )}
-                        </div>
+                        <p className="text-sm" style={{ color: theme.colors.textMuted }}>
+                          Skóre: <span className="font-bold">{item.score}/{item.activity?.max_score || 100}</span>
+                        </p>
                       )}
 
                       {item.notes && (
-                        <p className="text-sm mt-1" style={{ color: theme.colors.textMuted }}>
+                        <p className="text-sm mt-1 italic" style={{ color: theme.colors.textMuted }}>
                           "{item.notes}"
                         </p>
                       )}
 
-                      <div className="flex items-center gap-3 mt-2 text-sm">
-                        <span style={{ color: theme.colors.xp }}>
-                          +{(item.activity?.xp_reward || 0) * (isFlawless ? 2 : 1)} XP
-                        </span>
-                        <span style={{ color: theme.colors.currency }}>
-                          +{(item.activity?.emerald_reward || 0) * (isFlawless ? 2 : 1)} {theme.icons.currency}
-                        </span>
-                      </div>
+                      <p className="text-sm mt-2" style={{ color: theme.colors.primary }}>
+                        +{item.activity?.adventure_points || 10} bodů k dobrodružství
+                      </p>
                     </div>
+
+                    {/* Optional message input - per activity */}
+                    <input
+                      type="text"
+                      placeholder="Přidat vzkaz (volitelné)..."
+                      value={approvalMessages[item.id] || ''}
+                      onChange={(e) => setApprovalMessages(prev => ({
+                        ...prev,
+                        [item.id]: e.target.value
+                      }))}
+                      className="px-3 py-2 rounded-lg border bg-transparent text-sm focus:outline-none"
+                      style={{
+                        borderColor: theme.colors.backgroundLight,
+                        color: theme.colors.text
+                      }}
+                      disabled={processingId !== null}
+                    />
 
                     <div className="flex gap-2">
                       <button
@@ -455,7 +843,7 @@ export default function ParentDashboard({
                       <button
                         onClick={() => approveActivity(item)}
                         disabled={processingId === item.id}
-                        className="p-2 rounded-lg transition-colors"
+                        className="flex-1 p-2 rounded-lg transition-colors flex items-center justify-center gap-2"
                         style={{
                           backgroundColor: `${theme.colors.primary}20`,
                           color: theme.colors.primary
@@ -464,7 +852,10 @@ export default function ParentDashboard({
                         {processingId === item.id ? (
                           <Loader2 className="w-5 h-5 animate-spin" />
                         ) : (
-                          <Check className="w-5 h-5" />
+                          <>
+                            <Check className="w-5 h-5" />
+                            Schválit
+                          </>
                         )}
                       </button>
                     </div>
@@ -476,24 +867,20 @@ export default function ParentDashboard({
         )}
       </div>
 
-      {/* Pending Purchases */}
-      <div
-        className="rounded-xl p-4 border-2"
-        style={{
-          backgroundColor: theme.colors.card,
-          borderColor: theme.colors.backgroundLight
-        }}
-      >
-        <h2 className="text-lg font-bold mb-4 flex items-center gap-2" style={{ color: theme.colors.text }}>
-          <Gift className="w-5 h-5" style={{ color: theme.colors.currency }} />
-          Nákupy k předání ({pendingPurchases.length})
-        </h2>
+      {/* Legacy: Pending Purchases */}
+      {pendingPurchases.length > 0 && (
+        <div
+          className="rounded-xl p-4 border-2"
+          style={{
+            backgroundColor: theme.colors.card,
+            borderColor: theme.colors.backgroundLight
+          }}
+        >
+          <h2 className="text-lg font-bold mb-4 flex items-center gap-2" style={{ color: theme.colors.text }}>
+            <Gift className="w-5 h-5" style={{ color: theme.colors.currency }} />
+            Nákupy k předání ({pendingPurchases.length})
+          </h2>
 
-        {pendingPurchases.length === 0 ? (
-          <p style={{ color: theme.colors.textMuted }}>
-            Žádné nákupy k předání
-          </p>
-        ) : (
           <div className="space-y-3">
             {pendingPurchases.map((item) => (
               <div
@@ -510,9 +897,6 @@ export default function ParentDashboard({
                   </div>
                   <p className="font-bold" style={{ color: theme.colors.text }}>
                     {item.item?.name}
-                  </p>
-                  <p className="text-sm" style={{ color: theme.colors.currency }}>
-                    {theme.icons.currency} {item.item?.price}
                   </p>
                 </div>
 
@@ -537,8 +921,8 @@ export default function ParentDashboard({
               </div>
             ))}
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </main>
   )
 }

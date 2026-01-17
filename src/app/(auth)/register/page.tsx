@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { DEFAULT_THEME } from '@/lib/themes'
@@ -10,7 +9,6 @@ import { Mail, Lock, User, Loader2, ArrowLeft, Check, Users, GraduationCap } fro
 type UserRole = 'student' | 'parent'
 
 export default function RegisterPage() {
-  const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -37,6 +35,13 @@ export default function RegisterPage() {
 
     if (username.length < 3) {
       setError('Přezdívka musí mít alespoň 3 znaky')
+      return
+    }
+
+    // Validate username characters - allow letters (including Czech), numbers, underscore
+    const usernameRegex = /^[a-zA-Z0-9_áčďéěíňóřšťúůýžÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ]+$/
+    if (!usernameRegex.test(username)) {
+      setError('Přezdívka může obsahovat pouze písmena, čísla a podtržítko')
       return
     }
 
@@ -153,7 +158,7 @@ export default function RegisterPage() {
                   Student
                 </div>
                 <div className="text-xs text-[var(--foreground-muted)] mt-1">
-                  Plním úkoly a sbírám odměny
+                  Učím se a rostu každým dnem
                 </div>
               </button>
 
