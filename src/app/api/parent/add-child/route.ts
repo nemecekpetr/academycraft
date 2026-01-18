@@ -31,14 +31,26 @@ export async function POST(request: Request) {
 
     // Use admin client to find student by email (bypasses RLS)
     const adminClient = createAdminClient()
+    const normalizedEmail = email.trim().toLowerCase()
+
+    console.log('Searching for student with email:', normalizedEmail)
 
     const { data: student, error: findError } = await adminClient
       .from('profiles')
-      .select('id, username, role, parent_id')
-      .eq('email', email.trim().toLowerCase())
+      .select('id, username, email, role, parent_id')
+      .eq('email', normalizedEmail)
       .single()
 
+    console.log('Search result:', { student, findError })
+
     if (findError || !student) {
+      // Try to find without case sensitivity - list all to debug
+      const { data: allProfiles } = await adminClient
+        .from('profiles')
+        .select('email, role')
+        .eq('role', 'student')
+      console.log('All student emails in DB:', allProfiles?.map(p => p.email))
+
       return NextResponse.json({ error: 'Student s tímto emailem nebyl nalezen' }, { status: 404 })
     }
 
