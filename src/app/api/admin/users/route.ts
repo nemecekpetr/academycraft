@@ -200,7 +200,7 @@ export async function GET(request: NextRequest) {
       .select('*', { count: 'exact', head: true })
 
     // Get paginated data
-    const { data, error } = await supabase
+    const { data: profiles, error } = await supabase
       .from('profiles')
       .select('*')
       .order('created_at', { ascending: false })
@@ -214,8 +214,43 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    // Get activity counts and learning days for all users
+    const userIds = profiles?.map(p => p.id) || []
+
+    // Get approved activities count per user
+    const { data: activityCounts } = await supabase
+      .from('completed_activities')
+      .select('user_id')
+      .eq('status', 'approved')
+      .in('user_id', userIds)
+
+    // Get learning days count per user
+    const { data: learningDays } = await supabase
+      .from('learning_days')
+      .select('user_id')
+      .in('user_id', userIds)
+
+    // Create lookup maps
+    const activityCountMap: Record<string, number> = {}
+    const learningDaysMap: Record<string, number> = {}
+
+    activityCounts?.forEach(a => {
+      activityCountMap[a.user_id] = (activityCountMap[a.user_id] || 0) + 1
+    })
+
+    learningDays?.forEach(l => {
+      learningDaysMap[l.user_id] = (learningDaysMap[l.user_id] || 0) + 1
+    })
+
+    // Enrich profiles with metrics
+    const enrichedProfiles = profiles?.map(profile => ({
+      ...profile,
+      activities_count: activityCountMap[profile.id] || 0,
+      learning_days_count: learningDaysMap[profile.id] || 0,
+    }))
+
     return NextResponse.json({
-      data,
+      data: enrichedProfiles,
       pagination: {
         page,
         limit,

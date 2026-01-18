@@ -33,6 +33,9 @@ interface Profile {
   longest_streak: number
   is_banned: boolean
   created_at: string
+  last_activity_date: string | null
+  activities_count: number
+  learning_days_count: number
 }
 
 export default function AdminUsersPage() {
@@ -343,8 +346,9 @@ export default function AdminUsersPage() {
               <tr className="border-b border-[#2a2a4e]">
                 <th className="text-left px-6 py-4 text-sm font-medium text-[var(--foreground-muted)]">Uživatel</th>
                 <th className="text-left px-6 py-4 text-sm font-medium text-[var(--foreground-muted)]">Role</th>
-                <th className="text-left px-6 py-4 text-sm font-medium text-[var(--foreground-muted)]">XP</th>
-                <th className="text-left px-6 py-4 text-sm font-medium text-[var(--foreground-muted)]">Smaragdy</th>
+                <th className="text-left px-6 py-4 text-sm font-medium text-[var(--foreground-muted)]">Aktivity</th>
+                <th className="text-left px-6 py-4 text-sm font-medium text-[var(--foreground-muted)]">Dny učení</th>
+                <th className="text-left px-6 py-4 text-sm font-medium text-[var(--foreground-muted)]">Naposledy</th>
                 <th className="text-left px-6 py-4 text-sm font-medium text-[var(--foreground-muted)]">Status</th>
                 <th className="text-right px-6 py-4 text-sm font-medium text-[var(--foreground-muted)]">Akce</th>
               </tr>
@@ -373,8 +377,13 @@ export default function AdminUsersPage() {
                       {user.role}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-[var(--color-xp-green)]">{user.xp}</td>
-                  <td className="px-6 py-4 text-[var(--color-emerald)]">{user.emeralds}</td>
+                  <td className="px-6 py-4 text-[var(--color-emerald)]">{user.activities_count}</td>
+                  <td className="px-6 py-4 text-[var(--color-rare)]">{user.learning_days_count}</td>
+                  <td className="px-6 py-4 text-[var(--foreground-muted)] text-sm">
+                    {user.last_activity_date
+                      ? new Date(user.last_activity_date).toLocaleDateString('cs-CZ')
+                      : '—'}
+                  </td>
                   <td className="px-6 py-4">
                     {user.is_banned ? (
                       <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-red-500/20 text-red-400">
