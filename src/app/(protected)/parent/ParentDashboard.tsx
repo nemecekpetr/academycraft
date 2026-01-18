@@ -164,52 +164,34 @@ export default function ParentDashboard({
     setAddChildError(null)
     setAddChildSuccess(null)
 
-    const supabase = createClient()
+    try {
+      const response = await fetch('/api/parent/add-child', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: childEmail.trim() }),
+      })
 
-    const { data: student, error: findError } = await supabase
-      .from('profiles')
-      .select('id, username, role, parent_id')
-      .eq('email', childEmail.trim().toLowerCase())
-      .single()
+      const data = await response.json()
 
-    if (findError || !student) {
-      setAddChildError('Student s tímto emailem nebyl nalezen')
+      if (!response.ok) {
+        setAddChildError(data.error || 'Nepodařilo se přiřadit dítě')
+        setAddingChild(false)
+        return
+      }
+
+      setAddChildSuccess(`${data.username} byl úspěšně přidán!`)
+      setChildEmail('')
       setAddingChild(false)
-      return
-    }
 
-    if (student.role !== 'student') {
-      setAddChildError('Tento uživatel není student')
+      setTimeout(() => {
+        router.refresh()
+        setShowAddChild(false)
+        setAddChildSuccess(null)
+      }, 1500)
+    } catch {
+      setAddChildError('Chyba připojení')
       setAddingChild(false)
-      return
     }
-
-    if (student.parent_id) {
-      setAddChildError('Tento student již má přiřazeného rodiče')
-      setAddingChild(false)
-      return
-    }
-
-    const { error: updateError } = await supabase
-      .from('profiles')
-      .update({ parent_id: profile.id })
-      .eq('id', student.id)
-
-    if (updateError) {
-      setAddChildError('Nepodařilo se přiřadit dítě')
-      setAddingChild(false)
-      return
-    }
-
-    setAddChildSuccess(`${student.username} byl úspěšně přidán!`)
-    setChildEmail('')
-    setAddingChild(false)
-
-    setTimeout(() => {
-      router.refresh()
-      setShowAddChild(false)
-      setAddChildSuccess(null)
-    }, 1500)
   }
 
   async function approveActivity(item: PendingActivity) {

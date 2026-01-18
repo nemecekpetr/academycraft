@@ -102,8 +102,8 @@ export default function ProtectedLayout({
       {/* Sidebar */}
       <aside
         className={`
-          fixed lg:static inset-y-0 left-0 z-40
-          w-64 border-r-2
+          fixed inset-y-0 left-0 z-40
+          w-64 border-r-2 flex flex-col
           transform transition-transform duration-200
           ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
         `}
@@ -113,7 +113,7 @@ export default function ProtectedLayout({
         }}
       >
         {/* Logo & User Info */}
-        <div className="p-4 border-b-2" style={{ borderColor: theme.colors.backgroundLight }}>
+        <div className="p-4 border-b-2 shrink-0" style={{ borderColor: theme.colors.backgroundLight }}>
           <Link href="/dashboard" className="block">
             <h1 className="text-xl font-bold" style={{ color: theme.colors.primary }}>
               {theme.icon} AcademyCraft
@@ -157,7 +157,7 @@ export default function ProtectedLayout({
         </div>
 
         {/* Navigation */}
-        <nav className="p-4 space-y-1">
+        <nav className="p-4 space-y-1 flex-1 overflow-y-auto min-h-0">
           {navItems.map(({ href, iconKey, label }) => {
             const isActive = pathname === href || pathname.startsWith(href + '/')
             return (
@@ -190,7 +190,7 @@ export default function ProtectedLayout({
         </nav>
 
         {/* Bottom section */}
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t-2" style={{ borderColor: theme.colors.backgroundLight }}>
+        <div className="p-4 border-t-2 shrink-0" style={{ borderColor: theme.colors.backgroundLight }}>
           <Link
             href="/settings"
             onClick={() => setSidebarOpen(false)}
@@ -222,7 +222,7 @@ export default function ProtectedLayout({
       )}
 
       {/* Main content */}
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 overflow-auto lg:ml-64">
         <div className="p-4 lg:p-8 pt-16 lg:pt-8">
           {children}
         </div>
