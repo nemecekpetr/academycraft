@@ -205,6 +205,21 @@ export interface AdventureTemplate {
   category: string
 }
 
+// Požadavky na odměny - Motivation 3.0
+export interface RewardRequest {
+  id: string
+  user_id: string
+  template_id: string
+  reward_name: string
+  reward_description: string | null
+  points_spent: number
+  status: 'pending' | 'approved' | 'rejected' | 'fulfilled'
+  created_at: string
+  reviewed_at: string | null
+  reviewed_by: string | null
+  fulfilled_at: string | null
+}
+
 // Časová kapsle - Motivation 3.0
 export interface TimeCapsule {
   id: string

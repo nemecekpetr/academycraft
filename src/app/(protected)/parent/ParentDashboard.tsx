@@ -65,6 +65,18 @@ interface PendingPurchase {
   item: { name: string; price: number } | null
 }
 
+interface RewardRequest {
+  id: string
+  user_id: string
+  reward_name: string
+  reward_description: string | null
+  points_spent: number
+  status: string
+  created_at: string
+  reviewed_at: string | null
+  user: { username: string } | null
+}
+
 interface ParentDashboardProps {
   profile: {
     id: string
@@ -75,6 +87,9 @@ interface ParentDashboardProps {
   pendingPurchases: PendingPurchase[]
   familyAdventures: FamilyAdventureType[]
   adventureTemplates: AdventureTemplate[]
+  pendingRewardRequests: RewardRequest[]
+  approvedRewardRequests: RewardRequest[]
+  parentId: string
 }
 
 export default function ParentDashboard({
@@ -84,13 +99,19 @@ export default function ParentDashboard({
   pendingPurchases: initialPurchases,
   familyAdventures: initialAdventures,
   adventureTemplates,
+  pendingRewardRequests: initialPendingRewards,
+  approvedRewardRequests: initialApprovedRewards,
+  parentId,
 }: ParentDashboardProps) {
   const { theme } = useTheme()
   const router = useRouter()
   const [pendingActivities, setPendingActivities] = useState(initialActivities)
   const [pendingPurchases, setPendingPurchases] = useState(initialPurchases)
   const [familyAdventures, setFamilyAdventures] = useState(initialAdventures)
+  const [pendingRewardRequests, setPendingRewardRequests] = useState(initialPendingRewards)
+  const [approvedRewardRequests, setApprovedRewardRequests] = useState(initialApprovedRewards)
   const [processingId, setProcessingId] = useState<string | null>(null)
+  const [processingRewardId, setProcessingRewardId] = useState<string | null>(null)
   const [childEmail, setChildEmail] = useState('')
   const [addingChild, setAddingChild] = useState(false)
   const [addChildError, setAddChildError] = useState<string | null>(null)
@@ -328,6 +349,58 @@ export default function ParentDashboard({
     setNewAdventureName('')
     setNewAdventureDesc('')
     setNewAdventurePoints(100)
+    router.refresh()
+  }
+
+  async function reviewRewardRequest(requestId: string, approved: boolean) {
+    setProcessingRewardId(requestId)
+    const supabase = createClient()
+
+    const { error } = await supabase.rpc('review_reward_request', {
+      p_request_id: requestId,
+      p_reviewer_id: parentId,
+      p_approved: approved,
+    })
+
+    if (error) {
+      console.error('Error reviewing reward request:', error)
+      setProcessingRewardId(null)
+      return
+    }
+
+    if (approved) {
+      // Move from pending to approved
+      const request = pendingRewardRequests.find(r => r.id === requestId)
+      if (request) {
+        setPendingRewardRequests(prev => prev.filter(r => r.id !== requestId))
+        setApprovedRewardRequests(prev => [{ ...request, status: 'approved', reviewed_at: new Date().toISOString() }, ...prev])
+      }
+    } else {
+      // Just remove from pending
+      setPendingRewardRequests(prev => prev.filter(r => r.id !== requestId))
+    }
+
+    setProcessingRewardId(null)
+    router.refresh()
+  }
+
+  async function fulfillRewardRequest(requestId: string) {
+    setProcessingRewardId(requestId)
+    const supabase = createClient()
+
+    const { error } = await supabase.rpc('fulfill_reward_request', {
+      p_request_id: requestId,
+      p_reviewer_id: parentId,
+    })
+
+    if (error) {
+      console.error('Error fulfilling reward request:', error)
+      setProcessingRewardId(null)
+      return
+    }
+
+    setApprovedRewardRequests(prev => prev.filter(r => r.id !== requestId))
+    setProcessingRewardId(null)
     router.refresh()
   }
 
@@ -866,6 +939,146 @@ export default function ParentDashboard({
           </div>
         )}
       </div>
+
+      {/* Pending Reward Requests */}
+      {pendingRewardRequests.length > 0 && (
+        <div
+          className="rounded-xl p-4 mb-6 border-2"
+          style={{
+            backgroundColor: theme.colors.card,
+            borderColor: theme.colors.backgroundLight
+          }}
+        >
+          <h2 className="text-lg font-bold mb-4 flex items-center gap-2" style={{ color: theme.colors.text }}>
+            <Gift className="w-5 h-5" style={{ color: '#eab308' }} />
+            Žádosti o odměny ({pendingRewardRequests.length})
+          </h2>
+
+          <div className="space-y-3">
+            {pendingRewardRequests.map((request) => (
+              <div
+                key={request.id}
+                className="p-4 rounded-lg"
+                style={{ backgroundColor: theme.colors.backgroundLight }}
+              >
+                <div className="flex flex-col gap-3">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-bold" style={{ color: theme.colors.primary }}>
+                        {request.user?.username}
+                      </span>
+                      <span style={{ color: theme.colors.textMuted }}>chce:</span>
+                    </div>
+                    <p className="font-bold text-lg" style={{ color: theme.colors.text }}>
+                      {request.reward_name}
+                    </p>
+                    {request.reward_description && (
+                      <p className="text-sm mt-1" style={{ color: theme.colors.textMuted }}>
+                        {request.reward_description}
+                      </p>
+                    )}
+                    <p className="text-sm mt-2" style={{ color: '#eab308' }}>
+                      Za {request.points_spent} bodů
+                    </p>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => reviewRewardRequest(request.id, false)}
+                      disabled={processingRewardId === request.id}
+                      className="p-2 rounded-lg transition-colors"
+                      style={{ backgroundColor: 'rgba(239, 68, 68, 0.2)', color: '#ef4444' }}
+                    >
+                      {processingRewardId === request.id ? (
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                      ) : (
+                        <X className="w-5 h-5" />
+                      )}
+                    </button>
+                    <button
+                      onClick={() => reviewRewardRequest(request.id, true)}
+                      disabled={processingRewardId === request.id}
+                      className="flex-1 p-2 rounded-lg transition-colors flex items-center justify-center gap-2"
+                      style={{
+                        backgroundColor: 'rgba(34, 197, 94, 0.2)',
+                        color: '#22c55e'
+                      }}
+                    >
+                      {processingRewardId === request.id ? (
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                      ) : (
+                        <>
+                          <Check className="w-5 h-5" />
+                          Schválit
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Approved Rewards - waiting to be fulfilled */}
+      {approvedRewardRequests.length > 0 && (
+        <div
+          className="rounded-xl p-4 mb-6 border-2"
+          style={{
+            backgroundColor: theme.colors.card,
+            borderColor: theme.colors.backgroundLight
+          }}
+        >
+          <h2 className="text-lg font-bold mb-4 flex items-center gap-2" style={{ color: theme.colors.text }}>
+            <Star className="w-5 h-5" style={{ color: '#22c55e' }} />
+            Schválené odměny k předání ({approvedRewardRequests.length})
+          </h2>
+
+          <div className="space-y-3">
+            {approvedRewardRequests.map((request) => (
+              <div
+                key={request.id}
+                className="p-4 rounded-lg flex items-center justify-between"
+                style={{ backgroundColor: theme.colors.backgroundLight }}
+              >
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="font-bold" style={{ color: theme.colors.primary }}>
+                      {request.user?.username}
+                    </span>
+                  </div>
+                  <p className="font-bold" style={{ color: theme.colors.text }}>
+                    {request.reward_name}
+                  </p>
+                  <p className="text-xs" style={{ color: theme.colors.textMuted }}>
+                    Schváleno {request.reviewed_at && new Date(request.reviewed_at).toLocaleDateString('cs-CZ')}
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => fulfillRewardRequest(request.id)}
+                  disabled={processingRewardId === request.id}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg transition-colors"
+                  style={{
+                    backgroundColor: 'rgba(34, 197, 94, 0.2)',
+                    color: '#22c55e'
+                  }}
+                >
+                  {processingRewardId === request.id ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <>
+                      <Check className="w-5 h-5" />
+                      Splněno
+                    </>
+                  )}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Legacy: Pending Purchases */}
       {pendingPurchases.length > 0 && (

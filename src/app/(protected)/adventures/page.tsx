@@ -64,6 +64,13 @@ export default async function AdventuresPage() {
     .select('*')
     .order('suggested_points', { ascending: true })
 
+  // Get user's reward requests
+  const { data: rewardRequests } = await supabase
+    .from('reward_requests')
+    .select('*')
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: false })
+
   // Separate active and achieved adventures
   const activeAdventure = adventures.find(a => a.status === 'active') || null
   const achievedAdventures = adventures.filter(a => a.status === 'achieved')
@@ -90,6 +97,8 @@ export default async function AdventuresPage() {
         userPoints={profile.adventure_points || 0}
         totalContribution={totalContribution}
         hasParent={!!profile.parent_id}
+        rewardRequests={rewardRequests || []}
+        userId={user.id}
       />
     </main>
   )

@@ -121,6 +121,78 @@ export default async function ParentPage() {
     .select('*')
     .order('suggested_points', { ascending: true })
 
+  // Get pending reward requests from children (Motivation 3.0)
+  let pendingRewardRequests: Array<{
+    id: string
+    user_id: string
+    reward_name: string
+    reward_description: string | null
+    points_spent: number
+    status: string
+    created_at: string
+    reviewed_at: string | null
+    user: { username: string } | null
+  }> = []
+
+  if (childIds.length > 0) {
+    const { data } = await supabase
+      .from('reward_requests')
+      .select(`
+        id,
+        user_id,
+        reward_name,
+        reward_description,
+        points_spent,
+        status,
+        created_at,
+        reviewed_at,
+        user:profiles(username)
+      `)
+      .in('user_id', childIds)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: true })
+
+    if (data) {
+      pendingRewardRequests = data as unknown as typeof pendingRewardRequests
+    }
+  }
+
+  // Get approved reward requests (waiting to be fulfilled)
+  let approvedRewardRequests: Array<{
+    id: string
+    user_id: string
+    reward_name: string
+    reward_description: string | null
+    points_spent: number
+    status: string
+    created_at: string
+    reviewed_at: string | null
+    user: { username: string } | null
+  }> = []
+
+  if (childIds.length > 0) {
+    const { data } = await supabase
+      .from('reward_requests')
+      .select(`
+        id,
+        user_id,
+        reward_name,
+        reward_description,
+        points_spent,
+        status,
+        created_at,
+        reviewed_at,
+        user:profiles(username)
+      `)
+      .in('user_id', childIds)
+      .eq('status', 'approved')
+      .order('reviewed_at', { ascending: false })
+
+    if (data) {
+      approvedRewardRequests = data as unknown as typeof approvedRewardRequests
+    }
+  }
+
   return (
     <ParentDashboard
       profile={profile}
@@ -129,6 +201,9 @@ export default async function ParentPage() {
       pendingPurchases={pendingPurchases}
       familyAdventures={familyAdventures || []}
       adventureTemplates={adventureTemplates || []}
+      pendingRewardRequests={pendingRewardRequests}
+      approvedRewardRequests={approvedRewardRequests}
+      parentId={user.id}
     />
   )
 }
