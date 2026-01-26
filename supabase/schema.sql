@@ -525,6 +525,15 @@ BEGIN
     RAISE EXCEPTION 'Child profile not found or not a student';
   END IF;
 
+  -- SECURITY: Check if child already has a parent assigned
+  IF EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE id = p_child_id
+    AND parent_id IS NOT NULL
+  ) THEN
+    RAISE EXCEPTION 'Child already has a parent assigned';
+  END IF;
+
   -- Link child to parent
   UPDATE public.profiles
   SET parent_id = p_parent_id

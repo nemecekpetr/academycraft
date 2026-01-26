@@ -69,7 +69,7 @@ app/src/
 
 **User Auth (Supabase)**:
 - Routes: `/login`, `/register`, `/forgot-password`, `/reset-password`
-- Protected routes: `/dashboard`, `/quests`, `/shop`, `/profile`, `/parent`, `/leaderboard`
+- Protected routes: `/dashboard`, `/quests`, `/shop`, `/profile`, `/parent`, `/leaderboard`, `/adventures`, `/capsule`, `/story`, `/settings`
 - `middleware.ts` handles redirects for unauthenticated users
 
 **Admin Auth (Supabase with role check)**:
@@ -93,10 +93,21 @@ Key tables (see `supabase/schema.sql` for full schema):
 - `purchases` - Purchase history
 - `mystery_boxes` - 7-day streak reward tracking
 
+Motivation 3.0 tables (see `supabase/motivation_3_migration.sql`):
+- `skill_areas` - Subject areas (math, Czech, logic) for skill tracking
+- `skill_progress` - User mastery level per skill area (exploring→growing→confident→teaching)
+- `learning_days` - Daily learning records (replaces punitive streaks)
+- `family_adventures` - Shared family goals with point contributions
+- `recognitions` - "Now-that" recognition messages from parents
+- `time_capsules` - Letters to future self with goals and reflections
+
 ### API Routes
 
-- `/api/admin/*` - Admin-only endpoints (users, activities, purchases, approvals)
+- `/api/admin/*` - Admin/parent endpoints (users, activities, purchases, approvals)
 - `/api/notifications/approval-request` - Email notifications for parent approval flow
+- `/api/notifications/parent-link-request` - Email with verification code for parent-child linking
+- `/api/parent/add-child` - Parent initiates child linking (creates pending link)
+- `/api/parent/verify-link` - Child confirms parent link with verification code
 
 All admin routes use `requireAdmin()` or `requireAdminOrParent()` from `lib/supabase/admin.ts` for authorization.
 
@@ -125,7 +136,7 @@ Copy `.env.local.example` to `.env.local`:
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key  # For admin API routes only
-RESEND_API_KEY=your_resend_api_key  # For email notifications
+RESEND_API_KEY=your_resend_api_key  # For email notifications (not in example file)
 ```
 
 ## Supabase Setup
@@ -138,9 +149,13 @@ Run SQL files in Supabase SQL Editor in order:
 5. `supabase/motivation_3_migration.sql` - Motivation 3.0 schema (skill areas, learning days, family adventures)
 6. `supabase/time_capsule.sql` - Time capsule feature tables
 7. `supabase/seed_rewards.sql` - Additional reward items (if needed)
+8. `supabase/pending_parent_links.sql` - Secure parent-child verification system
+9. `supabase/family_scoping.sql` - Per-family activities and shop items
+10. `supabase/activity_date_migration.sql` - Activity date column for historical submissions
 
 Utility scripts (not for initial setup):
 - `supabase/complete_reset.sql` - Drops all data and recreates schema (development only)
+- `supabase/fix_link_child_to_parent.sql` - Security fix for existing installations
 
 ## Supabase Client Usage
 

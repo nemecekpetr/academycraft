@@ -79,7 +79,8 @@ CREATE OR REPLACE FUNCTION approve_activity_atomic(
   p_user_id UUID,
   p_skill_area_id UUID DEFAULT NULL,
   p_parent_id UUID DEFAULT NULL,
-  p_recognition_message TEXT DEFAULT NULL
+  p_recognition_message TEXT DEFAULT NULL,
+  p_activity_date DATE DEFAULT NULL
 )
 RETURNS JSON
 LANGUAGE plpgsql
@@ -94,12 +95,13 @@ DECLARE
   v_active_adventure_id UUID;
   v_adventure_points_current INTEGER;
   v_adventure_points_needed INTEGER;
-  v_today DATE := CURRENT_DATE;
+  v_learning_date DATE := COALESCE(p_activity_date, CURRENT_DATE);
 BEGIN
-  -- 1. Update completed_activities status
+  -- 1. Update completed_activities status (and activity_date if provided)
   UPDATE completed_activities
   SET status = 'approved',
-      reviewed_at = NOW()
+      reviewed_at = NOW(),
+      activity_date = COALESCE(p_activity_date, activity_date, CURRENT_DATE)
   WHERE id = p_activity_id AND status = 'pending';
 
   IF NOT FOUND THEN
@@ -113,9 +115,9 @@ BEGIN
   WHERE id = p_user_id
   RETURNING adventure_points INTO v_new_points;
 
-  -- 3. Record/update learning day
+  -- 3. Record/update learning day (use activity_date for historical submissions)
   INSERT INTO learning_days (user_id, learning_date, activities_count)
-  VALUES (p_user_id, v_today, 1)
+  VALUES (p_user_id, v_learning_date, 1)
   ON CONFLICT (user_id, learning_date)
   DO UPDATE SET activities_count = learning_days.activities_count + 1;
 
