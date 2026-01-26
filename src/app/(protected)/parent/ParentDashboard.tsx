@@ -44,6 +44,7 @@ interface PendingActivity {
   score: number | null
   notes: string | null
   submitted_at: string
+  activity_date: string | null
   user: { username: string } | null
   activity: {
     name: string
@@ -77,6 +78,14 @@ interface RewardRequest {
   user: { username: string } | null
 }
 
+interface PendingChildLink {
+  id: string
+  child_id: string
+  expires_at: string
+  created_at: string
+  child: { id: string; username: string; email: string } | null
+}
+
 interface ParentDashboardProps {
   profile: {
     id: string
@@ -90,6 +99,7 @@ interface ParentDashboardProps {
   pendingRewardRequests: RewardRequest[]
   approvedRewardRequests: RewardRequest[]
   parentId: string
+  pendingChildLinks?: PendingChildLink[]
 }
 
 export default function ParentDashboard({
@@ -102,6 +112,7 @@ export default function ParentDashboard({
   pendingRewardRequests: initialPendingRewards,
   approvedRewardRequests: initialApprovedRewards,
   parentId,
+  pendingChildLinks: initialPendingLinks = [],
 }: ParentDashboardProps) {
   const { theme } = useTheme()
   const router = useRouter()
@@ -110,8 +121,10 @@ export default function ParentDashboard({
   const [familyAdventures, setFamilyAdventures] = useState(initialAdventures)
   const [pendingRewardRequests, setPendingRewardRequests] = useState(initialPendingRewards)
   const [approvedRewardRequests, setApprovedRewardRequests] = useState(initialApprovedRewards)
+  const [pendingChildLinks, setPendingChildLinks] = useState(initialPendingLinks)
   const [processingId, setProcessingId] = useState<string | null>(null)
   const [processingRewardId, setProcessingRewardId] = useState<string | null>(null)
+  const [processingLinkId, setProcessingLinkId] = useState<string | null>(null)
   const [childEmail, setChildEmail] = useState('')
   const [addingChild, setAddingChild] = useState(false)
   const [addChildError, setAddChildError] = useState<string | null>(null)
@@ -134,6 +147,8 @@ export default function ParentDashboard({
 
   // Approval message state - per activity to avoid cross-contamination
   const [approvalMessages, setApprovalMessages] = useState<Record<string, string>>({})
+  // Activity date state - per activity for modifying when activity was done
+  const [activityDates, setActivityDates] = useState<Record<string, string>>({})
 
   // Goal setting state (Motivation 3.0 - Autonomy: Set goals together)
   const [editingGoalChildId, setEditingGoalChildId] = useState<string | null>(null)
@@ -179,7 +194,11 @@ export default function ParentDashboard({
         return
       }
 
-      setAddChildSuccess(`${data.username} byl úspěšně přidán!`)
+      if (data.pending) {
+        setAddChildSuccess(`Žádost odeslána na ${data.username}. Čeká na potvrzení.`)
+      } else {
+        setAddChildSuccess(`${data.username} byl úspěšně přidán!`)
+      }
       setChildEmail('')
       setAddingChild(false)
 
@@ -187,10 +206,28 @@ export default function ParentDashboard({
         router.refresh()
         setShowAddChild(false)
         setAddChildSuccess(null)
-      }, 1500)
+      }, 2000)
     } catch {
       setAddChildError('Chyba připojení')
       setAddingChild(false)
+    }
+  }
+
+  async function cancelPendingLink(linkId: string) {
+    setProcessingLinkId(linkId)
+
+    try {
+      const response = await fetch(`/api/parent/add-child?id=${linkId}`, {
+        method: 'DELETE',
+      })
+
+      if (response.ok) {
+        setPendingChildLinks(prev => prev.filter(l => l.id !== linkId))
+      }
+    } catch (error) {
+      console.error('Cancel pending link error:', error)
+    } finally {
+      setProcessingLinkId(null)
     }
   }
 
@@ -201,6 +238,10 @@ export default function ParentDashboard({
 
     try {
       const message = approvalMessages[item.id]?.trim() || ''
+      // Use modified date, or activity_date from submission, or submitted_at date
+      const activityDate = activityDates[item.id] ||
+        item.activity_date ||
+        item.submitted_at.split('T')[0]
 
       const response = await fetch('/api/admin/approvals', {
         method: 'POST',
@@ -209,6 +250,7 @@ export default function ParentDashboard({
           activityId: item.id,
           action: 'approve',
           recognitionMessage: message || undefined,
+          activityDate,
         }),
       })
 
@@ -220,8 +262,13 @@ export default function ParentDashboard({
         return
       }
 
-      // Clear message for this activity
+      // Clear message and date for this activity
       setApprovalMessages(prev => {
+        const next = { ...prev }
+        delete next[item.id]
+        return next
+      })
+      setActivityDates(prev => {
         const next = { ...prev }
         delete next[item.id]
         return next
@@ -432,47 +479,63 @@ export default function ParentDashboard({
             className="p-4 rounded-lg mb-4"
             style={{ backgroundColor: theme.colors.backgroundLight }}
           >
-            <p className="text-sm mb-3" style={{ color: theme.colors.textMuted }}>
+            <p className="text-sm mb-4 font-medium" style={{ color: theme.colors.text }}>
               Vytvořte společný cíl pro rodinu
             </p>
 
-            <div className="space-y-3">
-              <input
-                type="text"
-                value={newAdventureName}
-                onChange={(e) => setNewAdventureName(e.target.value)}
-                placeholder="Název dobrodružství (např. Filmový večer)"
-                className="w-full px-4 py-2 rounded-lg border-2 bg-transparent focus:outline-none"
-                style={{
-                  borderColor: theme.colors.backgroundLight,
-                  color: theme.colors.text
-                }}
-              />
-
-              <textarea
-                value={newAdventureDesc}
-                onChange={(e) => setNewAdventureDesc(e.target.value)}
-                placeholder="Popis (volitelné)"
-                rows={2}
-                className="w-full px-4 py-2 rounded-lg border-2 bg-transparent focus:outline-none resize-none"
-                style={{
-                  borderColor: theme.colors.backgroundLight,
-                  color: theme.colors.text
-                }}
-              />
-
+            <div className="space-y-4">
               <div>
-                <label className="text-sm block mb-1" style={{ color: theme.colors.textMuted }}>
-                  Potřebné body: {newAdventurePoints}
+                <label className="text-xs block mb-1.5 font-medium" style={{ color: theme.colors.textMuted }}>
+                  Název dobrodružství *
                 </label>
                 <input
-                  type="range"
-                  min={50}
-                  max={1000}
-                  step={50}
+                  type="text"
+                  value={newAdventureName}
+                  onChange={(e) => setNewAdventureName(e.target.value)}
+                  placeholder="např. Filmový večer"
+                  className="w-full px-4 py-3 rounded-lg border-2 focus:outline-none transition-colors"
+                  style={{
+                    backgroundColor: theme.colors.card,
+                    borderColor: theme.colors.primary + '40',
+                    color: theme.colors.text
+                  }}
+                />
+              </div>
+
+              <div>
+                <label className="text-xs block mb-1.5 font-medium" style={{ color: theme.colors.textMuted }}>
+                  Popis (volitelné)
+                </label>
+                <textarea
+                  value={newAdventureDesc}
+                  onChange={(e) => setNewAdventureDesc(e.target.value)}
+                  placeholder="Co vás čeká..."
+                  rows={2}
+                  className="w-full px-4 py-3 rounded-lg border-2 focus:outline-none resize-none transition-colors"
+                  style={{
+                    backgroundColor: theme.colors.card,
+                    borderColor: theme.colors.primary + '40',
+                    color: theme.colors.text
+                  }}
+                />
+              </div>
+
+              <div>
+                <label className="text-xs block mb-1.5 font-medium" style={{ color: theme.colors.textMuted }}>
+                  Potřebné body *
+                </label>
+                <input
+                  type="number"
+                  min={1}
                   value={newAdventurePoints}
-                  onChange={(e) => setNewAdventurePoints(parseInt(e.target.value))}
-                  className="w-full"
+                  onChange={(e) => setNewAdventurePoints(Math.max(1, parseInt(e.target.value) || 1))}
+                  className="w-full px-4 py-3 rounded-lg border-2 focus:outline-none transition-colors"
+                  style={{
+                    backgroundColor: theme.colors.card,
+                    borderColor: theme.colors.primary + '40',
+                    color: theme.colors.text
+                  }}
+                  placeholder="100"
                 />
               </div>
 
@@ -606,6 +669,50 @@ export default function ParentDashboard({
                   <Check className="w-5 h-5" />
                 )}
               </button>
+            </div>
+          </div>
+        )}
+
+        {/* Pending Child Links */}
+        {pendingChildLinks.length > 0 && (
+          <div
+            className="p-4 rounded-lg mb-4"
+            style={{ backgroundColor: `${theme.colors.accent}10` }}
+          >
+            <p className="text-sm font-bold mb-3 flex items-center gap-2" style={{ color: theme.colors.accent }}>
+              <Clock className="w-4 h-4" />
+              Čekající žádosti o propojení ({pendingChildLinks.length})
+            </p>
+            <div className="space-y-2">
+              {pendingChildLinks.map((link) => (
+                <div
+                  key={link.id}
+                  className="flex items-center justify-between p-3 rounded-lg"
+                  style={{ backgroundColor: theme.colors.backgroundLight }}
+                >
+                  <div>
+                    <p className="font-medium" style={{ color: theme.colors.text }}>
+                      {link.child?.username || 'Neznámý'}
+                    </p>
+                    <p className="text-xs" style={{ color: theme.colors.textMuted }}>
+                      {link.child?.email} • vyprší {new Date(link.expires_at).toLocaleDateString('cs-CZ')}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => cancelPendingLink(link.id)}
+                    disabled={processingLinkId === link.id}
+                    className="p-2 rounded-lg transition-colors"
+                    style={{ backgroundColor: 'rgba(239, 68, 68, 0.2)', color: '#ef4444' }}
+                    title="Zrušit žádost"
+                  >
+                    {processingLinkId === link.id ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <X className="w-4 h-4" />
+                    )}
+                  </button>
+                </div>
+              ))}
             </div>
           </div>
         )}
@@ -863,6 +970,26 @@ export default function ParentDashboard({
                       <p className="text-sm mt-2" style={{ color: theme.colors.primary }}>
                         +{item.activity?.adventure_points || 10} bodů k dobrodružství
                       </p>
+                    </div>
+
+                    {/* Activity date picker - allows parent to modify when activity was done */}
+                    <div className="flex items-center gap-2">
+                      <Calendar className="w-4 h-4 flex-shrink-0" style={{ color: theme.colors.primary }} />
+                      <input
+                        type="date"
+                        value={activityDates[item.id] || item.activity_date || item.submitted_at.split('T')[0]}
+                        onChange={(e) => setActivityDates(prev => ({
+                          ...prev,
+                          [item.id]: e.target.value
+                        }))}
+                        max={new Date().toISOString().split('T')[0]}
+                        className="flex-1 px-3 py-2 rounded-lg border bg-transparent text-sm focus:outline-none"
+                        style={{
+                          borderColor: theme.colors.backgroundLight,
+                          color: theme.colors.text
+                        }}
+                        disabled={processingId !== null}
+                      />
                     </div>
 
                     {/* Optional message input - per activity */}

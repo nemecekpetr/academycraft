@@ -6,6 +6,7 @@ interface ApproveRequest {
   activityId: string
   action: 'approve' | 'reject'
   recognitionMessage?: string
+  activityDate?: string  // YYYY-MM-DD format
 }
 
 export async function POST(request: NextRequest) {
@@ -14,7 +15,7 @@ export async function POST(request: NextRequest) {
     const { userId, role } = await requireAdminOrParent()
 
     const body: ApproveRequest = await request.json()
-    const { activityId, action, recognitionMessage } = body
+    const { activityId, action, recognitionMessage, activityDate } = body
 
     if (!activityId || !action) {
       return NextResponse.json(
@@ -28,6 +29,30 @@ export async function POST(request: NextRequest) {
         { error: 'Invalid action. Must be "approve" or "reject"' },
         { status: 400 }
       )
+    }
+
+    // Validate activityDate if provided (must not be in the future)
+    let validatedActivityDate: string | null = null
+    if (activityDate) {
+      const dateObj = new Date(activityDate)
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+
+      if (isNaN(dateObj.getTime())) {
+        return NextResponse.json(
+          { error: 'Invalid activity date format' },
+          { status: 400 }
+        )
+      }
+
+      if (dateObj > today) {
+        return NextResponse.json(
+          { error: 'Activity date cannot be in the future' },
+          { status: 400 }
+        )
+      }
+
+      validatedActivityDate = activityDate
     }
 
     const supabase = createAdminClient()
@@ -114,6 +139,7 @@ export async function POST(request: NextRequest) {
         p_skill_area_id: activity.skill_area_id,
         p_parent_id: user.parent_id,
         p_recognition_message: recognitionMessage?.trim() || null,
+        p_activity_date: validatedActivityDate,
       }
     )
 
@@ -176,14 +202,14 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Record learning day
-    const today = new Date().toISOString().split('T')[0]
+    // Record learning day (use activityDate if provided, otherwise today)
+    const learningDate = validatedActivityDate || new Date().toISOString().split('T')[0]
     const { error: learningDayError } = await supabase
       .from('learning_days')
       .upsert(
         {
           user_id: completedActivity.user_id,
-          learning_date: today,
+          learning_date: learningDate,
           activities_count: 1,
         },
         {
@@ -345,6 +371,7 @@ export async function GET(request: NextRequest) {
         score,
         notes,
         submitted_at,
+        activity_date,
         user:profiles!completed_activities_user_id_fkey(username, email, adventure_points, parent_id),
         activity:activities(name, icon, adventure_points, max_score, purpose_message, skill_area:skill_areas(name, color))
       `

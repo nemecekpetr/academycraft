@@ -49,6 +49,8 @@ export interface Activity {
   skill_area_id: string | null
   adventure_points: number
   purpose_message: string | null
+  // Family scoping
+  family_id: string | null
 }
 
 export interface CompletedActivity {
@@ -64,6 +66,7 @@ export interface CompletedActivity {
   xp_earned: number
   emeralds_earned: number
   is_flawless: boolean
+  activity_date: string | null
 }
 
 // Extended type with joined activity data
@@ -81,6 +84,8 @@ export interface ShopItem {
   min_level: number
   created_by: string
   created_at: string
+  // Family scoping
+  family_id: string | null
 }
 
 export interface Purchase {
@@ -100,6 +105,21 @@ export interface MysteryBox {
   reward_description: string
   opened_at: string
   earned_for: string
+}
+
+// Pending parent-child link verification
+export interface PendingParentLink {
+  id: string
+  parent_id: string
+  child_id: string
+  verification_code: string
+  expires_at: string
+  created_at: string
+}
+
+// Extended type with joined parent profile data
+export interface PendingParentLinkWithParent extends PendingParentLink {
+  parent?: Profile
 }
 
 // =====================================================
@@ -372,6 +392,12 @@ export interface Database {
         Row: AdventureTemplate
         Insert: Omit<AdventureTemplate, 'id'>
         Update: Partial<Omit<AdventureTemplate, 'id'>>
+        Relationships: []
+      }
+      pending_parent_links: {
+        Row: PendingParentLink
+        Insert: Omit<PendingParentLink, 'id' | 'created_at'>
+        Update: Partial<Omit<PendingParentLink, 'id' | 'created_at'>>
         Relationships: []
       }
     }

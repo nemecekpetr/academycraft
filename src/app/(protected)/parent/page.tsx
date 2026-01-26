@@ -45,6 +45,7 @@ export default async function ParentPage() {
     score: number | null
     notes: string | null
     submitted_at: string
+    activity_date: string | null
     user: { username: string } | null
     activity: {
       name: string
@@ -68,6 +69,7 @@ export default async function ParentPage() {
         score,
         notes,
         submitted_at,
+        activity_date,
         user:profiles(username),
         activity:activities(name, xp_reward, emerald_reward, adventure_points, flawless_threshold, max_score, purpose_message, skill_area:skill_areas(name, color))
       `)
@@ -193,6 +195,31 @@ export default async function ParentPage() {
     }
   }
 
+  // Get pending child link requests
+  const { data: pendingChildLinks } = await supabase
+    .from('pending_parent_links')
+    .select(`
+      id,
+      child_id,
+      expires_at,
+      created_at,
+      child:profiles!pending_parent_links_child_id_fkey(id, username, email)
+    `)
+    .eq('parent_id', user.id)
+    .gt('expires_at', new Date().toISOString())
+    .order('created_at', { ascending: false })
+
+  // Transform pending child links to expected format (Supabase returns arrays for FK joins)
+  const transformedPendingLinks = (pendingChildLinks || []).map((link) => ({
+    id: link.id as string,
+    child_id: link.child_id as string,
+    expires_at: link.expires_at as string,
+    created_at: link.created_at as string,
+    child: Array.isArray(link.child) && link.child[0]
+      ? { id: link.child[0].id, username: link.child[0].username, email: link.child[0].email }
+      : null
+  }))
+
   return (
     <ParentDashboard
       profile={profile}
@@ -204,6 +231,7 @@ export default async function ParentPage() {
       pendingRewardRequests={pendingRewardRequests}
       approvedRewardRequests={approvedRewardRequests}
       parentId={user.id}
+      pendingChildLinks={transformedPendingLinks}
     />
   )
 }

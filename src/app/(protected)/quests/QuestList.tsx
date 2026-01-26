@@ -18,6 +18,7 @@ import {
   X,
   Check,
   Sparkles,
+  Calendar,
   type LucideProps,
 } from 'lucide-react'
 import type { Activity, CompletedActivity, SkillArea } from '@/types/database'
@@ -85,6 +86,9 @@ export default function QuestList({ activities, pendingActivities, userId }: Que
   const [selectedActivity, setSelectedActivity] = useState<ActivityWithSkillArea | null>(null)
   const [score, setScore] = useState('')
   const [notes, setNotes] = useState('')
+  const [activityDate, setActivityDate] = useState(() =>
+    new Date().toISOString().split('T')[0]
+  )
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
   const [showReflection, setShowReflection] = useState(false)
@@ -106,6 +110,7 @@ export default function QuestList({ activities, pendingActivities, userId }: Que
       xp_earned: 0,
       emeralds_earned: 0,
       is_flawless: false,
+      activity_date: activityDate,
     })
 
     if (error) {
@@ -158,6 +163,7 @@ export default function QuestList({ activities, pendingActivities, userId }: Que
       setSelectedActivity(null)
       setScore('')
       setNotes('')
+      setActivityDate(new Date().toISOString().split('T')[0])
       setSuccess(false)
       // Show reflection modal after success (Motivation 3.0 - Flow tracking)
       setShowReflection(true)
@@ -469,6 +475,26 @@ export default function QuestList({ activities, pendingActivities, userId }: Que
                       />
                     </div>
                   )}
+
+                  {/* Date picker for when activity was completed */}
+                  <div className="mb-4">
+                    <label className="flex items-center gap-2 mb-2 text-sm font-medium" style={{ color: theme.colors.text }}>
+                      <Calendar className="w-4 h-4" style={{ color: theme.colors.primary }} />
+                      Kdy jsi to udělal/a?
+                    </label>
+                    <input
+                      type="date"
+                      value={activityDate}
+                      onChange={(e) => setActivityDate(e.target.value)}
+                      max={new Date().toISOString().split('T')[0]}
+                      className="w-full px-4 py-3 rounded-lg border-2 outline-none transition-colors"
+                      style={{
+                        backgroundColor: theme.colors.background,
+                        borderColor: theme.colors.backgroundLight,
+                        color: theme.colors.text
+                      }}
+                    />
+                  </div>
 
                   <div className="mb-5">
                     <label className="block mb-2 text-sm font-medium" style={{ color: theme.colors.text }}>
